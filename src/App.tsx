@@ -8,7 +8,33 @@ type Document = {
   date: string
   folder: string
 }
+function FileTypeBadge({ fileName }: { fileName: string }) {
+  const extension = fileName.includes('.')
+    ? fileName.split('.').pop()?.toLowerCase() ?? ''
+    : ''
 
+  const badgeStyles: Record<string, string> = {
+    pdf: 'bg-red-50 text-red-600',
+    doc: 'bg-blue-50 text-blue-600',
+    docx: 'bg-blue-50 text-blue-600',
+    jpg: 'bg-amber-50 text-amber-700',
+    jpeg: 'bg-amber-50 text-amber-700',
+    png: 'bg-emerald-50 text-emerald-600',
+  }
+
+  const label = extension ? extension.toUpperCase() : 'FILE'
+  const colorClass =
+    badgeStyles[extension] ?? 'bg-slate-100 text-slate-600'
+
+  return (
+    <span
+      className={`rounded-lg px-2 py-2 text-xs font-bold ${colorClass}`}
+      aria-label={`File type: ${label}`}
+    >
+      {label}
+    </span>
+  )
+}
 const folders = [
   { name: 'Employment Documents', icon: 'briefcase-business', color: 'text-blue-600 bg-blue-50', description: 'Offer, welcome and appointment letters' },
   { name: 'Payslips', icon: 'wallet', color: 'text-emerald-600 bg-emerald-50', description: 'Monthly salary slips' },
@@ -37,6 +63,8 @@ function App() {
   const [activeFolder, setActiveFolder] = useState('All Documents')
   const [search, setSearch] = useState('')
   const [documents, setDocuments] = useState(initialDocuments)
+  const [selectedDocument, setSelectedDocument] =
+  useState<Document | null>(null)
   const [showUploadForm, setShowUploadForm] = useState(false)
 
   const visibleDocuments = documents.filter((document) => {
@@ -178,12 +206,14 @@ function App() {
            >
           <td className="py-4 pr-4">
            <div className="flex items-center gap-3">
-            <span className="rounded-lg bg-red-50 px-2 py-2 text-xs font-bold text-red-600">
-              PDF
-            </span>
-            <span className="font-medium text-slate-700">
+            <FileTypeBadge fileName={document.name} />
+            <button
+              type="button"
+              onClick={() => setSelectedDocument(document)}
+              className="text-left font-medium text-slate-700 hover:text-blue-600 hover:underline"
+            >
               {document.name}
-            </span>
+            </button>
            </div>
           </td>
 
@@ -213,7 +243,7 @@ function App() {
             </button>
           </td>
        </tr>
-     ))}
+       ))}
 
                 {visibleDocuments.length === 0 && (
                   <tr>
@@ -228,11 +258,101 @@ function App() {
           <p className="mt-5 text-xs text-slate-400">
             Demo content only. These are fictional examples; no actual documents are stored or protected yet.
           </p>
+        
         </section>
       </main>
+
+      {selectedDocument && (
+        <div className="fixed inset-0 z-50">
+          {/* Background overlay */}
+          <button
+            type="button"
+            aria-label="Close document details"
+            className="absolute inset-0 h-full w-full bg-slate-900/30"
+            onClick={() => setSelectedDocument(null)}
+          />
+
+          {/* Right-side panel */}
+          <aside
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="document-details-title"
+            className="absolute right-0 top-0 h-full w-full max-w-md overflow-y-auto bg-white p-6 shadow-2xl sm:p-8"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-blue-600">
+                  Document details
+                </p>
+                <h2
+                  id="document-details-title"
+                  className="mt-2 break-words text-xl font-bold text-slate-900"
+                >
+                  {selectedDocument.name}
+                </h2>
+              </div>
+
+              <button
+                type="button"
+                aria-label="Close details panel"
+                onClick={() => setSelectedDocument(null)}
+                className="rounded-lg px-3 py-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-8 space-y-5">
+              <div>
+                <p className="text-sm text-slate-500">File type</p>
+                <div className="mt-2">
+                  <FileTypeBadge fileName={selectedDocument.name} />
+                </div>
+              </div>
+
+              <div className="border-t border-slate-100 pt-4">
+                <p className="text-sm text-slate-500">Folder</p>
+                <p className="mt-1 font-medium text-slate-800">
+                  {selectedDocument.folder}
+                </p>
+              </div>
+
+              <div className="border-t border-slate-100 pt-4">
+                <p className="text-sm text-slate-500">File size</p>
+                <p className="mt-1 font-medium text-slate-800">
+                  {selectedDocument.size}
+                </p>
+              </div>
+
+              <div className="border-t border-slate-100 pt-4">
+                <p className="text-sm text-slate-500">Date added</p>
+                <p className="mt-1 font-medium text-slate-800">
+                  {selectedDocument.date}
+                </p>
+              </div>
+
+              <p className="rounded-xl bg-amber-50 p-4 text-sm text-amber-800">
+                this panel displays document information only.
+    
+              </p>
+            </div>
+
+
+            <button
+              type="button"
+              onClick={() => setSelectedDocument(null)}
+              className="mt-8 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Close 
+            </button>
+          </aside>
+        </div>
+      )}
     </div>
   )
 }
+
+
 
 function UploadForm({
   onCancel,
@@ -386,4 +506,4 @@ function UploadForm({
   )
 }
 
-export default App 
+export default App
