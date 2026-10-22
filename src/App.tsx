@@ -1,144 +1,355 @@
-const documents = [
-  { name: "Personal Documents", type: "PDF", category: "Personal", size: "2.4 MB", date: "Oct 18, 2026", icon: "📄" },
-  { name: "Insurance Policy", type: "PDF", category: "Finance", size: "1.8 MB", date: "Oct 15, 2026", icon: "🛡️" },
-  { name: "Travel Documents", type: "PDF", category: "Travel", size: "3.2 MB", date: "Oct 12, 2026", icon: "✈️" },
-  { name: "Property Records", type: "PDF", category: "Personal", size: "4.1 MB", date: "Oct 10, 2026", icon: "🏠" },
-  { name: "Tax Documents", type: "PDF", category: "Finance", size: "1.2 MB", date: "Oct 05, 2026", icon: "💼" },
-  { name: "Medical Records", type: "PDF", category: "Personal", size: "2.7 MB", date: "Sep 28, 2026", icon: "📋" },
+import { useState } from 'react'
+
+type Document = {
+  id: number
+  name: string
+  type: string
+  size: string
+  date: string
+  folder: string
+}
+
+const folders = [
+  { name: 'Employment Documents', icon: 'briefcase-business', color: 'text-blue-600 bg-blue-50', description: 'Offer, welcome and appointment letters' },
+  { name: 'Payslips', icon: 'wallet', color: 'text-emerald-600 bg-emerald-50', description: 'Monthly salary slips' },
+  { name: 'Salary & Hike Letters', icon: 'trending-up', color: 'text-purple-600 bg-purple-50', description: 'Increments and revised CTC' },
+  { name: 'Tax Documents', icon: 'landmark', color: 'text-amber-600 bg-amber-50', description: 'Form 16, AIS and tax records' },
+  { name: 'Benefits & Insurance', icon: 'shield-check', color: 'text-pink-600 bg-pink-50', description: 'EPF, insurance and benefits' },
 ]
 
-const categories = ["All Files", "Personal", "Finance", "Travel"]
+const initialDocuments: Document[] = [
+  { id: 1, name: 'Welcome Letter.pdf', type: 'PDF', size: '420 KB', date: 'Oct 18, 2026', folder: 'Employment Documents' },
+  { id: 2, name: 'Offer Letter.pdf', type: 'PDF', size: '580 KB', date: 'Oct 17, 2026', folder: 'Employment Documents' },
+  { id: 3, name: 'Appointment Letter.pdf', type: 'PDF', size: '510 KB', date: 'Oct 16, 2026', folder: 'Employment Documents' },
+  { id: 4, name: 'September 2026 Payslip.pdf', type: 'PDF', size: '220 KB', date: 'Oct 01, 2026', folder: 'Payslips' },
+  { id: 5, name: 'August 2026 Payslip.pdf', type: 'PDF', size: '215 KB', date: 'Sep 01, 2026', folder: 'Payslips' },
+  { id: 6, name: 'July 2026 Payslip.pdf', type: 'PDF', size: '218 KB', date: 'Aug 01, 2026', folder: 'Payslips' },
+  { id: 7, name: 'Annual Hike Letter 2026.pdf', type: 'PDF', size: '360 KB', date: 'Apr 10, 2026', folder: 'Salary & Hike Letters' },
+  { id: 8, name: 'Revised CTC Letter.pdf', type: 'PDF', size: '390 KB', date: 'Apr 10, 2026', folder: 'Salary & Hike Letters' },
+  { id: 9, name: 'Form 16 - FY 2025-26.pdf', type: 'PDF', size: '680 KB', date: 'Jun 15, 2026', folder: 'Tax Documents' },
+  { id: 10, name: 'Form 26AS - FY 2025-26.pdf', type: 'PDF', size: '450 KB', date: 'Jun 14, 2026', folder: 'Tax Documents' },
+  { id: 11, name: 'ITR Acknowledgement.pdf', type: 'PDF', size: '310 KB', date: 'Jul 20, 2026', folder: 'Tax Documents' },
+  { id: 12, name: 'EPF Statement.pdf', type: 'PDF', size: '290 KB', date: 'Sep 12, 2026', folder: 'Benefits & Insurance' },
+  { id: 13, name: 'Health Insurance Policy.pdf', type: 'PDF', size: '1.2 MB', date: 'Aug 22, 2026', folder: 'Benefits & Insurance' },
+]
 
 function App() {
+  const [activeFolder, setActiveFolder] = useState('All Documents')
+  const [search, setSearch] = useState('')
+  const [documents, setDocuments] = useState(initialDocuments)
+  const [showUploadForm, setShowUploadForm] = useState(false)
+
+  const visibleDocuments = documents.filter((document) => {
+    const matchesFolder =
+      activeFolder === 'All Documents' || document.folder === activeFolder
+    const matchesSearch = document.name.toLowerCase().includes(search.toLowerCase())
+    return matchesFolder && matchesSearch
+  })
+
+  const folderCount = (folderName: string) =>
+    documents.filter((document) => document.folder === folderName).length
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 md:flex">
-      <aside className="border-b border-slate-200 bg-white p-5 md:min-h-screen md:w-64 md:border-b-0 md:border-r">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-xl text-white">
-            ◈
-          </div>
+    <div className="min-h-screen bg-slate-50 text-slate-800 md:flex">
+      <aside className="w-full border-b border-slate-200 bg-white p-5 md:min-h-screen md:w-72 md:border-b-0 md:border-r">
+        <div className="mb-9 flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-xl font-bold text-white">T</div>
           <div>
             <h1 className="text-xl font-bold tracking-tight">TrustVault</h1>
-            <p className="text-xs text-slate-500">Your private space</p>
+            <p className="text-xs text-slate-500">Your files, protected</p>
           </div>
         </div>
 
-        <p className="mb-3 mt-8 text-xs font-semibold uppercase tracking-wider text-slate-400">
-          Workspace
-        </p>
-
-        <nav className="flex gap-2 overflow-x-auto md:flex-col">
-          {categories.map((category, index) => (
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Workspace</p>
+        <nav className="flex flex-wrap gap-2 md:flex-col">
+          <button
+            onClick={() => setActiveFolder('All Documents')}
+            className={`flex items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium ${activeFolder === 'All Documents' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'}`}
+          >
+            <span>▦</span> All Documents
+          </button>
+          {folders.map((folder) => (
             <button
-              key={category}
-              className={`whitespace-nowrap rounded-lg px-3 py-2.5 text-left text-sm font-medium ${
-                index === 0
-                  ? "bg-indigo-50 text-indigo-700"
-                  : "text-slate-600 hover:bg-slate-100"
-              }`}
+              key={folder.name}
+              onClick={() => setActiveFolder(folder.name)}
+              className={`flex items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium ${activeFolder === folder.name ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'}`}
             >
-              {category === "All Files" ? "▦" : "▱"} {category}
+              <span className="text-lg">📁</span>
+              <span>{folder.name}</span>
             </button>
           ))}
         </nav>
 
-        <div className="mt-8 hidden rounded-xl bg-indigo-50 p-4 md:block">
-          <div className="mb-2 text-xl">🔐</div>
-          <p className="text-sm font-semibold text-slate-800">Privacy first</p>
-          <p className="mt-1 text-xs leading-5 text-slate-600">
-            Your documents deserve a secure home.
+        <div className="mt-10 rounded-2xl bg-slate-50 p-4">
+          <div className="mb-2 text-lg">🔒</div>
+          <h2 className="text-sm font-semibold">Privacy first</h2>
+          <p className="mt-1 text-xs leading-5 text-slate-500">
+            Keep employment and financial documents organized in one place.
           </p>
         </div>
-
-        <div className="mt-6 text-xs text-slate-400 md:mt-12">
-          TrustVault · Portfolio demo
-        </div>
+        <p className="mt-6 text-xs text-slate-400">TrustVault · Learning project</p>
       </aside>
 
       <main className="min-w-0 flex-1 p-5 sm:p-8 lg:p-10">
-        <header className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
+        <header className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
           <div>
-            <p className="text-sm text-slate-500">Your workspace</p>
-            <h2 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
-              My Documents
-            </h2>
-            <p className="mt-2 text-sm text-slate-500">
-              Keep your important files organized in one place.
-            </p>
+            <p className="mb-1 text-sm text-slate-500">Your workspace</p>
+            <h2 className="text-3xl font-bold tracking-tight">{activeFolder}</h2>
+            <p className="mt-2 text-sm text-slate-500">Your important documents, neatly organized.</p>
           </div>
-
           <button
-            onClick={() => alert("File upload will be added in the next step.")}
-            className="rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
+            onClick={() => setShowUploadForm(true)}
+            className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
           >
             + Upload document
           </button>
         </header>
+       {showUploadForm && (
+           <UploadForm
+          onCancel={() => setShowUploadForm(false)}
+          onUpload={(newDocument) => {
+          setDocuments((currentDocuments) => [
+                ...currentDocuments,
+            {
+          id: Math.max(0, ...currentDocuments.map((document) => document.id)) + 1,
+              ...newDocument,
+           },
+          ])
+        setActiveFolder('All Documents')
+        setSearch('')
+       }}
+       />
+       )}
 
-        <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5">
-            <p className="text-sm text-slate-500">Total documents</p>
-            <p className="mt-3 text-3xl font-bold">06</p>
-            <p className="mt-2 text-xs text-slate-400">Sample documents</p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-5">
-            <p className="text-sm text-slate-500">Storage used</p>
-            <p className="mt-3 text-3xl font-bold">15.4 MB</p>
-            <p className="mt-2 text-xs text-slate-400">Illustrative data only</p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-5">
-            <p className="text-sm text-slate-500">Workspace status</p>
-            <p className="mt-3 text-xl font-bold text-amber-600">Demo mode</p>
-            <p className="mt-2 text-xs text-slate-400">Storage not connected yet</p>
-          </div>
-        </div>
+      
 
-        <section className="mt-10">
-          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+        <section className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {folders.map((folder) => (
+            <button
+              key={folder.name}
+              onClick={() => setActiveFolder(folder.name)}
+              className={`rounded-2xl border bg-white p-5 text-left transition hover:-translate-y-0.5 hover:shadow-md ${activeFolder === folder.name ? 'border-blue-300 ring-2 ring-blue-100' : 'border-slate-200'}`}
+            >
+              <div className="mb-4 flex items-center justify-between">
+                <span className={`flex h-11 w-11 items-center justify-center rounded-xl text-2xl ${folder.color}`}>📁</span>
+                <span className="text-xs text-slate-400">{folderCount(folder.name)} files</span>
+              </div>
+              <h3 className="font-semibold">{folder.name}</h3>
+              <p className="mt-1 text-sm text-slate-500">{folder.description}</p>
+            </button>
+          ))}
+        </section>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
+          <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
             <div>
-              <h3 className="text-lg font-bold">Recent documents</h3>
+              <h3 className="text-lg font-bold">
+                {activeFolder === 'All Documents' ? 'All Documents' : activeFolder}
+              </h3>
               <p className="mt-1 text-sm text-slate-500">
-                Example files to preview your workspace.
+                {visibleDocuments.length} sample {visibleDocuments.length === 1 ? 'document' : 'documents'}
               </p>
             </div>
             <input
               type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
               placeholder="Search documents..."
-              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 sm:max-w-xs"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 sm:max-w-xs"
             />
           </div>
 
-          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {documents.map((document) => (
-              <article
-                key={document.name}
-                className="rounded-2xl border border-slate-200 bg-white p-5 transition hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-md"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-2xl">
-                    {document.icon}
-                  </div>
-                  <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">
-                    {document.type}
-                  </span>
-                </div>
-
-                <h4 className="mt-5 truncate font-semibold">{document.name}</h4>
-                <p className="mt-2 text-sm text-slate-500">
-                  {document.category} · {document.size}
-                </p>
-                <div className="mt-5 border-t border-slate-100 pt-4 text-xs text-slate-400">
-                  Example date: {document.date}
-                </div>
-              </article>
-            ))}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 text-xs uppercase tracking-wider text-slate-400">
+                  <th className="pb-4 font-medium">Document name</th>
+                  <th className="pb-4 font-medium">Folder</th>
+                  <th className="pb-4 font-medium">Size</th>
+                  <th className="pb-4 font-medium">Date added</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleDocuments.map((document) => (
+                  <tr key={document.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
+                    <td className="py-4 pr-4">
+                      <div className="flex items-center gap-3">
+                        <span className="rounded-lg bg-red-50 px-2 py-2 text-xs font-bold text-red-600">PDF</span>
+                        <span className="font-medium text-slate-700">{document.name}</span>
+                      </div>
+                    </td>
+                    <td className="py-4 text-slate-500">{document.folder}</td>
+                    <td className="py-4 text-slate-500">{document.size}</td>
+                    <td className="py-4 text-slate-500">{document.date}</td>
+                  </tr>
+                ))}
+                {visibleDocuments.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="py-10 text-center text-slate-500">
+                      No documents found. Try another search.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
+          <p className="mt-5 text-xs text-slate-400">
+            Demo content only. These are fictional examples; no actual documents are stored or protected yet.
+          </p>
         </section>
-
-        <footer className="mt-10 border-t border-slate-200 py-5 text-center text-xs text-slate-400">
-          TrustVault is currently a demo. No files are being uploaded or stored.
-        </footer>
       </main>
+    </div>
+  )
+}
+
+function UploadForm({
+  onCancel,
+  onUpload,
+}: {
+  onCancel: () => void
+  onUpload: (document: Omit<Document, 'id'>) => void
+}) {
+  const [fileName, setFileName] = useState('')
+  const [folder, setFolder] = useState('Employment Documents')
+  const [error, setError] = useState('')
+
+  return (
+    <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
+      <h3 className="text-lg font-bold">Upload a document</h3>
+      <p className="mt-1 text-sm text-slate-500">
+        Choose a document and its destination folder.
+      </p>
+
+      <form
+        className="mt-5 space-y-4"
+        onSubmit={(event) => {
+         event.preventDefault()
+
+        const fileInput = event.currentTarget.querySelector(
+         'input[type="file"]',
+        )as HTMLInputElement
+
+       const selectedFile = fileInput.files?.[0]
+
+       if (!selectedFile || !fileName || error) {
+       setError('Please select a valid file before continuing.')
+       return
+       }
+
+      const sizeInKB = Math.round(selectedFile.size / 1024)
+      const formattedSize =
+       sizeInKB >= 1024
+        ? `${(sizeInKB / 1024).toFixed(1)} MB`
+        : `${sizeInKB} KB`
+
+     onUpload({
+      name: selectedFile.name,
+      type: selectedFile.type,
+      size: formattedSize,
+      date: new Date().toLocaleDateString('en-US', {
+        month: 'short',
+        day: '2-digit',
+        year: 'numeric',
+      }),
+     folder,
+    })
+
+     onCancel()
+    }}
+      >
+        <div>
+          <label
+            htmlFor="document-file"
+            className="mb-2 block text-sm font-medium"
+          >
+            Choose a file
+          </label>
+          <input
+            id="document-file"
+            type="file"
+            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+            required
+            onChange={(event) => {
+  const selectedFile = event.target.files?.[0]
+
+  setError('')
+  setFileName('')
+
+  if (!selectedFile) return
+
+  const allowedTypes = [
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'image/jpeg',
+    'image/png',
+  ]
+
+  const maxSize = 10 * 1024 * 1024
+
+  if (!allowedTypes.includes(selectedFile.type)) {
+    setError('Unsupported file type. Choose a PDF, Word document, JPG, or PNG.')
+    event.target.value = ''
+    return
+  }
+
+  if (selectedFile.size > maxSize) {
+    setError('File is too large. The maximum allowed size is 10 MB.')
+    event.target.value = ''
+    return
+  }
+
+  setFileName(selectedFile.name)
+}}
+            className="block w-full rounded-xl border border-slate-200 p-3 text-sm"
+          />
+          <p className="mt-1 text-xs text-slate-500">
+            Allowed types: PDF, Word, JPG and PNG.
+          </p>
+          {error && (
+          <p className="mt-2 text-sm text-red-600" role="alert">
+          {error}
+          </p>
+          )}
+        </div>
+
+        <div>
+          <label
+            htmlFor="document-folder"
+            className="mb-2 block text-sm font-medium"
+          >
+            Save to folder
+          </label>
+          <select
+            id="document-folder"
+            value={folder}
+            onChange={(event) => setFolder(event.target.value)}
+            className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm"
+          >
+            <option>Employment Documents</option>
+            <option>Payslips</option>
+            <option>Salary &amp; Hike Letters</option>
+            <option>Tax Documents</option>
+            <option>Benefits &amp; Insurance</option>
+          </select>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="submit"
+            className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700"
+          >
+            Continue
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-semibold hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
     </div>
   )
 }
