@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Login from './Login'
+import Signup from './Signup'
 
 type Document = {
   id: number
@@ -65,6 +66,7 @@ function App() {
   const [search, setSearch] = useState('')
   const [documents, setDocuments] = useState(initialDocuments)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [currentPage, setCurrentPage] = useState<'login' | 'signup'>('login')
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null)
   const [showUploadForm, setShowUploadForm] = useState(false)
 
@@ -77,16 +79,29 @@ function App() {
 
   const folderCount = (folderName: string) =>
     documents.filter((document) => document.folder === folderName).length
-   if (!isLoggedIn) {
-   return (
-     <Login
-       onLogin={() => setIsLoggedIn(true)}
-       onSignup={() => {
-         alert('Signup page is coming next!')
-       }}
-     />
-   )
+   
+ if (!isLoggedIn) {
+  if (currentPage === 'signup') {
+    return (
+      <Signup
+        onSignup={() => {
+          alert('Signup is not connected yet. Real account creation comes next.')
+        }}
+        onLogin={() => setCurrentPage('login')}
+      />
+    )
   }
+
+  return (
+    <Login
+      onLogin={() => {
+        alert('Login is not connected yet. Real authentication comes next.')
+      }}
+      onSignup={() => setCurrentPage('signup')}
+    />
+  )
+}
+
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 md:flex">
