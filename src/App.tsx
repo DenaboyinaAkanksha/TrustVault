@@ -170,19 +170,51 @@ function App() {
                 </tr>
               </thead>
               <tbody>
-                {visibleDocuments.map((document) => (
-                  <tr key={document.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
-                    <td className="py-4 pr-4">
-                      <div className="flex items-center gap-3">
-                        <span className="rounded-lg bg-red-50 px-2 py-2 text-xs font-bold text-red-600">PDF</span>
-                        <span className="font-medium text-slate-700">{document.name}</span>
-                      </div>
-                    </td>
-                    <td className="py-4 text-slate-500">{document.folder}</td>
-                    <td className="py-4 text-slate-500">{document.size}</td>
-                    <td className="py-4 text-slate-500">{document.date}</td>
-                  </tr>
-                ))}
+              
+        {visibleDocuments.map((document) => (
+          <tr
+            key={document.id}
+            className="border-b border-slate-50 last:border-0 hover:bg-slate-50"
+           >
+          <td className="py-4 pr-4">
+           <div className="flex items-center gap-3">
+            <span className="rounded-lg bg-red-50 px-2 py-2 text-xs font-bold text-red-600">
+              PDF
+            </span>
+            <span className="font-medium text-slate-700">
+              {document.name}
+            </span>
+           </div>
+          </td>
+
+          <td className="py-4 text-slate-500">{document.folder}</td>
+          <td className="py-4 text-slate-500">{document.size}</td>
+          <td className="py-4 text-slate-500">{document.date}</td>
+ 
+          <td className="py-4 text-right">
+           <button
+              type="button"
+               onClick={() => {
+               const confirmed = window.confirm(
+                `Are you sure you want to delete "${document.name}"?`
+                 )
+
+              if (confirmed) {
+                 setDocuments((currentDocuments) =>
+                  currentDocuments.filter(
+                   (item) => item.id !== document.id
+                   )
+                )
+              }
+             }}
+            className="rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+             >
+             Delete
+            </button>
+          </td>
+       </tr>
+     ))}
+
                 {visibleDocuments.length === 0 && (
                   <tr>
                     <td colSpan={4} className="py-10 text-center text-slate-500">
@@ -354,4 +386,4 @@ function UploadForm({
   )
 }
 
-export default App
+export default App 
