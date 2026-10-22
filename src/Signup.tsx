@@ -12,10 +12,34 @@ function Signup({ onSignup, onLogin }: SignupProps) {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const passwordStrength = [
+  password.length >= 8,
+  /[A-Z]/.test(password),
+  /[a-z]/.test(password),
+  /[0-9]/.test(password),
+  /[^A-Za-z0-9]/.test(password),
+].filter(Boolean).length
 
+const strengthLabel =
+  password.length === 0
+    ? ''
+    : passwordStrength <= 2
+      ? 'Weak'
+      : passwordStrength <= 4
+        ? 'Medium'
+        : 'Strong'
+
+const strengthColor =
+  passwordStrength <= 2
+    ? 'bg-red-500'
+    : passwordStrength <= 4
+      ? 'bg-amber-500'
+      : 'bg-emerald-500'
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
+    setSuccess('')
 
     if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
       setError('Please complete all fields.')
@@ -37,7 +61,7 @@ function Signup({ onSignup, onLogin }: SignupProps) {
       return
     }
 
-    setError('Signup is not connected yet. Real account creation comes next.')
+    setSuccess(' Form validated successfully! Account creation is not connected yet.')
   }
 
   return (
@@ -111,26 +135,49 @@ function Signup({ onSignup, onLogin }: SignupProps) {
               <label htmlFor="signup-password" className="mb-2 block text-sm font-medium text-slate-700">
                 Password
               </label>
-              <div className="relative">
-                <input
-                  id="signup-password"
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete="new-password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  placeholder="At least 8 characters"
-                  minLength={8}
-                  required
-                  className="w-full rounded-xl border border-slate-300 px-4 py-3 pr-20 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-3 text-sm font-medium text-blue-600 hover:text-blue-800"
-                >
-                  {showPassword ? 'Hide' : 'Show'}
-                </button>
-              </div>
+                 
+        <div className="relative">
+         <input
+          id="signup-password"
+          type={showPassword ? 'text' : 'password'}
+         autoComplete="new-password"
+         value={password}
+         onChange={(event) => setPassword(event.target.value)}
+         placeholder="At least 8 characters"
+         minLength={8}
+         required
+         className="w-full rounded-xl border border-slate-300 px-4 py-3 pr-20 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+         />
+
+         <button
+          type="button"
+          onClick={() => setShowPassword(!showPassword)}
+          className="absolute inset-y-0 right-3 text-sm font-medium text-blue-600 hover:text-blue-800"
+         >
+         {showPassword ? 'Hide' : 'Show'}
+        </button>
+       </div>
+
+{password.length > 0 && (
+  <div className="mt-2">
+    <div className="mb-1 flex items-center justify-between">
+      <span className="text-xs text-slate-500">
+        Password strength
+      </span>
+      <span className="text-xs font-semibold text-slate-700">
+        {strengthLabel}
+      </span>
+    </div>
+
+    <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
+      <div
+        className={`h-full rounded-full transition-all duration-300 ${strengthColor}`}
+        style={{ width: `${(passwordStrength / 5) * 100}%` }}
+      />
+    </div>
+  </div>
+)}
+
             </div>
 
             <div>
@@ -147,13 +194,41 @@ function Signup({ onSignup, onLogin }: SignupProps) {
                 required
                 className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
               />
+
+              {confirmPassword.length > 0 && (
+               <p
+                className={`mt-2 text-xs font-medium ${
+                password === confirmPassword
+                ? 'text-emerald-600'
+               : 'text-red-600'
+               }`}
+               >
+              {password === confirmPassword
+                ? 'Passwords match'
+               : 'Passwords do not match'}
+               </p>
+              )}
             </div>
 
+            
             {error && (
-              <p role="alert" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
-                {error}
-              </p>
+             <p
+              role="alert"
+              className="rounded-lg bg-red-50 p-3 text-sm text-red-700"
+              >
+             {error}
+             </p>
             )}
+
+          {success && (
+           <p
+            role="status"
+            className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700"
+           >
+          {success}
+          </p> 
+          )}
+
 
             <button
               type="submit"
