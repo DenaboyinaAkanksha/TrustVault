@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import Login from './Login'
 
 type Document = {
   id: number
@@ -63,8 +64,8 @@ function App() {
   const [activeFolder, setActiveFolder] = useState('All Documents')
   const [search, setSearch] = useState('')
   const [documents, setDocuments] = useState(initialDocuments)
-  const [selectedDocument, setSelectedDocument] =
-  useState<Document | null>(null)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null)
   const [showUploadForm, setShowUploadForm] = useState(false)
 
   const visibleDocuments = documents.filter((document) => {
@@ -76,6 +77,16 @@ function App() {
 
   const folderCount = (folderName: string) =>
     documents.filter((document) => document.folder === folderName).length
+   if (!isLoggedIn) {
+   return (
+     <Login
+       onLogin={() => setIsLoggedIn(true)}
+       onSignup={() => {
+         alert('Signup page is coming next!')
+       }}
+     />
+   )
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 md:flex">
