@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { supabase } from './lib/supabase'
 
 type LoginProps = {
   onLogin: () => void
@@ -10,25 +11,43 @@ function Login({ onLogin, onSignup }: LoginProps) {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setError('')
+   
+ async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+   event.preventDefault()
+   setError('')
 
-    if (!email.trim() || !password) {
-      setError('Please enter your email and password.')
+   if (!email.trim() || !password) {
+     setError('Please enter your email and password.')
+     return
+    }
+
+   setLoading(true)
+
+   try {
+       const { error: loginError } =
+       await supabase.auth.signInWithPassword({
+         email: email.trim(),
+         password,
+       })
+
+    if (loginError) {
+      console.error('Supabase login error:', loginError.message)
+      setError(loginError.message)
       return
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError('Please enter a valid email address.')
-      return
-    }
-
-    setError('Login is not connected yet. Authentication will be added next.')
+    onLogin()
+    } catch {
+      setError('Unable to sign in right now. Please try again.')
+    } finally {
+     setLoading(false)
+     }
   }
 
-  return (
+
+   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-100 px-4 py-10">
       <section className="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-xl">
         <div className="bg-slate-900 px-8 py-8 text-center">
@@ -119,12 +138,13 @@ function Login({ onLogin, onSignup }: LoginProps) {
               </p>
             )}
 
-            <button
-              type="submit"
-              className="w-full rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200"
+           <button
+             type="submit"
+             disabled={loading}
+             className="w-full rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Sign in
-            </button>
+            {loading ? 'Signing in...' : 'Sign in'}
+           </button>
           </form>
 
           <p className="mt-6 text-center text-sm text-slate-500">

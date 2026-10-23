@@ -1,11 +1,11 @@
 import { useState } from 'react'
-
+import { supabase } from './lib/supabase'
 type SignupProps = {
   onSignup: () => void
   onLogin: () => void
 }
 
-function Signup({ onSignup, onLogin }: SignupProps) {
+function Signup({ onLogin }: SignupProps) {
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -13,6 +13,7 @@ function Signup({ onSignup, onLogin }: SignupProps) {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [loading, setLoading] = useState(false)
   const passwordStrength = [
   password.length >= 8,
   /[A-Z]/.test(password),
@@ -36,33 +37,64 @@ const strengthColor =
     : passwordStrength <= 4
       ? 'bg-amber-500'
       : 'bg-emerald-500'
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setError('')
-    setSuccess('')
+  
+async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  event.preventDefault()
+  setError('')
+  setSuccess('')
 
-    if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
-      setError('Please complete all fields.')
-      return
-    }
-
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError('Please enter a valid email address.')
-      return
-    }
-
-    if (password.length < 8) {
-      setError('Your password must be at least 8 characters long.')
-      return
-    }
-
-    if (password !== confirmPassword) {
-      setError('Your passwords do not match.')
-      return
-    }
-
-    setSuccess(' Form validated successfully! Account creation is not connected yet.')
+  if (!fullName.trim() || !email.trim() || !password || !confirmPassword) {
+    setError('Please complete all fields.')
+    return
   }
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    setError('Please enter a valid email address.')
+    return
+  }
+
+  if (password.length < 8) {
+    setError('Your password must be at least 8 characters long.')
+    return
+  }
+
+  if (password !== confirmPassword) {
+    setError('Your passwords do not match.')
+    return
+  }
+
+  setLoading(true)
+
+  try {
+    const { data, error: signupError } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        data: {
+          full_name: fullName.trim(),
+        },
+      },
+    })
+
+    if (signupError) {
+      setError(signupError.message)
+      return
+    }
+
+    if (data.user && data.user.identities?.length === 0) {
+      setError('An account may already exist for this email. Try signing in.')
+      return
+    }
+
+    setSuccess(
+      'Signup request received. Check your email for a confirmation link if email confirmation is enabled.'
+    )
+  } catch {
+    setError('Unable to create your account right now. Please try again.')
+  } finally {
+    setLoading(false)
+  }
+}
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-100 px-4 py-10">
@@ -230,12 +262,15 @@ const strengthColor =
           )}
 
 
+            
             <button
               type="submit"
-              className="w-full rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-200"
-            >
-              Create account
+              disabled={loading}
+              className="w-full rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus:ring-4 focus:ring-blue-200"
+              >
+             {loading ? 'Creating account...' : 'Create account'}
             </button>
+
           </form>
 
           <p className="mt-6 text-center text-sm text-slate-500">

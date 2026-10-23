@@ -1,6 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Login from './Login'
 import Signup from './Signup'
+import { supabase } from './lib/supabase'
+import { uploadDocument } from './lib/documentService'
+
 
 type Document = {
   id: number
@@ -69,6 +72,53 @@ function App() {
   const [currentPage, setCurrentPage] = useState<'login' | 'signup'>('login')
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null)
   const [showUploadForm, setShowUploadForm] = useState(false)
+  const [authLoading, setAuthLoading] = useState(true)
+  
+
+
+  async function handleSignOut() {
+   const { error } = await supabase.auth.signOut()
+
+   if (error) {
+    alert('Unable to sign out. Please try again.')
+    return
+   }
+
+  setIsLoggedIn(false)
+  setCurrentPage('login')
+}  
+
+ useEffect(() => {
+  let mounted = true
+
+  async function checkSession() {
+    const { data, error } = await supabase.auth.getSession()
+
+    if (!mounted) return
+
+    if (error) {
+      setIsLoggedIn(false)
+    } else {
+      setIsLoggedIn(Boolean(data.session))
+    }
+
+    setAuthLoading(false)
+  }
+
+  void checkSession()
+
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange((_event, session) => {
+    setIsLoggedIn(Boolean(session))
+    setAuthLoading(false)
+  })
+
+  return () => {
+    mounted = false
+    subscription.unsubscribe()
+  }
+}, [])
 
   const visibleDocuments = documents.filter((document) => {
     const matchesFolder =
@@ -79,7 +129,16 @@ function App() {
 
   const folderCount = (folderName: string) =>
     documents.filter((document) => document.folder === folderName).length
-   
+ 
+  if (authLoading) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-50">
+      <p className="text-sm font-medium text-slate-600">
+        Loading TrustVault...
+      </p>
+    </div>
+  )
+}  
  if (!isLoggedIn) {
   if (currentPage === 'signup') {
     return (
@@ -94,9 +153,7 @@ function App() {
 
   return (
     <Login
-      onLogin={() => {
-        alert('Login is not connected yet. Real authentication comes next.')
-      }}
+      onLogin={() => setIsLoggedIn(true)}
       onSignup={() => setCurrentPage('signup')}
     />
   )
@@ -145,19 +202,37 @@ function App() {
       </aside>
 
       <main className="min-w-0 flex-1 p-5 sm:p-8 lg:p-10">
-        <header className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
-          <div>
-            <p className="mb-1 text-sm text-slate-500">Your workspace</p>
-            <h2 className="text-3xl font-bold tracking-tight">{activeFolder}</h2>
-            <p className="mt-2 text-sm text-slate-500">Your important documents, neatly organized.</p>
-          </div>
-          <button
-            onClick={() => setShowUploadForm(true)}
-            className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
-          >
-            + Upload document
-          </button>
-        </header>
+       
+    <header className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h2 className="text-2xl font-bold tracking-tight text-slate-900">
+          My Documents
+        </h2>
+         <p className="mt-1 text-sm text-slate-500">
+         Manage and organize your important files.
+       </p>
+     </div>
+
+    <div className="flex items-center gap-4">
+      <button
+       type="button"
+        onClick={() => setShowUploadForm(true)}
+        className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+        >
+      <span className="mr-2 text-lg leading-none">+</span>
+         Upload document
+      </button>
+
+     <button
+        type="button"
+        onClick={handleSignOut}
+        className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
+       >
+       Sign out
+     </button>
+   </div>
+ </header>
+
        {showUploadForm && (
            <UploadForm
           onCancel={() => setShowUploadForm(false)}
@@ -380,6 +455,7 @@ function App() {
 
 
 
+
 function UploadForm({
   onCancel,
   onUpload,
@@ -390,6 +466,7 @@ function UploadForm({
   const [fileName, setFileName] = useState('')
   const [folder, setFolder] = useState('Employment Documents')
   const [error, setError] = useState('')
+  const [isUploading, setIsUploading] = useState(false)
 
   return (
     <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
@@ -400,40 +477,58 @@ function UploadForm({
 
       <form
         className="mt-5 space-y-4"
-        onSubmit={(event) => {
-         event.preventDefault()
+        onSubmit={async (event) => {
+          event.preventDefault()
 
-        const fileInput = event.currentTarget.querySelector(
-         'input[type="file"]',
-        )as HTMLInputElement
+          const fileInput = event.currentTarget.querySelector(
+            'input[type="file"]',
+          ) as HTMLInputElement
 
-       const selectedFile = fileInput.files?.[0]
+          const selectedFile = fileInput.files?.[0]
 
-       if (!selectedFile || !fileName || error) {
-       setError('Please select a valid file before continuing.')
-       return
-       }
+          if (!selectedFile || !fileName || error || isUploading) {
+            setError('Please select a valid file before continuing.')
+            return
+          }
 
-      const sizeInKB = Math.round(selectedFile.size / 1024)
-      const formattedSize =
-       sizeInKB >= 1024
-        ? `${(sizeInKB / 1024).toFixed(1)} MB`
-        : `${sizeInKB} KB`
+          setIsUploading(true)
+          setError('')
 
-     onUpload({
-      name: selectedFile.name,
-      type: selectedFile.type,
-      size: formattedSize,
-      date: new Date().toLocaleDateString('en-US', {
-        month: 'short',
-        day: '2-digit',
-        year: 'numeric',
-      }),
-     folder,
-    })
+          try {
+            const savedDocument = await uploadDocument(selectedFile, folder)
 
-     onCancel()
-    }}
+            const sizeInKB = Math.round(savedDocument.size_bytes / 1024)
+            const formattedSize =
+              sizeInKB >= 1024
+                ? `${(sizeInKB / 1024).toFixed(1)} MB`
+                : `${sizeInKB} KB`
+
+            onUpload({
+              name: savedDocument.name,
+              type: savedDocument.mime_type,
+              size: formattedSize,
+              date: new Date(savedDocument.created_at).toLocaleDateString(
+                'en-US',
+                {
+                  month: 'short',
+                  day: '2-digit',
+                  year: 'numeric',
+                },
+              ),
+              folder: savedDocument.folder,
+            })
+
+            onCancel()
+          } catch (uploadError) {
+            setError(
+              uploadError instanceof Error
+                ? uploadError.message
+                : 'Upload failed. Please try again.',
+            )
+          } finally {
+            setIsUploading(false)
+          }
+        }}
       >
         <div>
           <label
@@ -442,52 +537,59 @@ function UploadForm({
           >
             Choose a file
           </label>
+
           <input
             id="document-file"
             type="file"
             accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
             required
             onChange={(event) => {
-  const selectedFile = event.target.files?.[0]
+              const selectedFile = event.target.files?.[0]
 
-  setError('')
-  setFileName('')
+              setError('')
+              setFileName('')
 
-  if (!selectedFile) return
+              if (!selectedFile) return
 
-  const allowedTypes = [
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'image/jpeg',
-    'image/png',
-  ]
+              const allowedTypes = [
+                'application/pdf',
+                'application/msword',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'image/jpeg',
+                'image/png',
+              ]
 
-  const maxSize = 10 * 1024 * 1024
+              const maxSize = 10 * 1024 * 1024
 
-  if (!allowedTypes.includes(selectedFile.type)) {
-    setError('Unsupported file type. Choose a PDF, Word document, JPG, or PNG.')
-    event.target.value = ''
-    return
-  }
+              if (!allowedTypes.includes(selectedFile.type)) {
+                setError(
+                  'Unsupported file type. Choose a PDF, Word document, JPG, or PNG.',
+                )
+                event.target.value = ''
+                return
+              }
 
-  if (selectedFile.size > maxSize) {
-    setError('File is too large. The maximum allowed size is 10 MB.')
-    event.target.value = ''
-    return
-  }
+              if (selectedFile.size > maxSize) {
+                setError(
+                  'File is too large. The maximum allowed size is 10 MB.',
+                )
+                event.target.value = ''
+                return
+              }
 
-  setFileName(selectedFile.name)
-}}
+              setFileName(selectedFile.name)
+            }}
             className="block w-full rounded-xl border border-slate-200 p-3 text-sm"
           />
+
           <p className="mt-1 text-xs text-slate-500">
-            Allowed types: PDF, Word, JPG and PNG.
+            Allowed types: PDF, Word, JPG and PNG. Maximum size: 10 MB.
           </p>
+
           {error && (
-          <p className="mt-2 text-sm text-red-600" role="alert">
-          {error}
-          </p>
+            <p className="mt-2 text-sm text-red-600" role="alert">
+              {error}
+            </p>
           )}
         </div>
 
@@ -498,6 +600,7 @@ function UploadForm({
           >
             Save to folder
           </label>
+
           <select
             id="document-folder"
             value={folder}
@@ -515,14 +618,17 @@ function UploadForm({
         <div className="flex flex-wrap gap-3">
           <button
             type="submit"
-            className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700"
+            disabled={isUploading}
+            className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Continue
+            {isUploading ? 'Uploading...' : 'Continue'}
           </button>
+
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-semibold hover:bg-slate-50"
+            disabled={isUploading}
+            className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-semibold hover:bg-slate-50 disabled:opacity-60"
           >
             Cancel
           </button>
@@ -531,5 +637,6 @@ function UploadForm({
     </div>
   )
 }
+
 
 export default App
