@@ -12,42 +12,78 @@ function Login({ onLogin, onSignup }: LoginProps) {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [loadingAction, setLoadingAction] = useState<'login' | 'reset' | null>(null)
+  const [resetMessage, setResetMessage] = useState('')
 
-   
- async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-   event.preventDefault()
-   setError('')
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setError('')
+    setResetMessage('')
 
-   if (!email.trim() || !password) {
-     setError('Please enter your email and password.')
-     return
-    }
-
-   setLoading(true)
-
-   try {
-       const { error: loginError } =
-       await supabase.auth.signInWithPassword({
-         email: email.trim(),
-         password,
-       })
-
-    if (loginError) {
-      console.error('Supabase login error:', loginError.message)
-      setError(loginError.message)
+    if (!email.trim() || !password) {
+      setError('Please enter your email and password.')
       return
     }
 
-    onLogin()
+    setLoading(true)
+    setLoadingAction('login')
+
+    try {
+      const { error: loginError } =
+        await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        })
+
+      if (loginError) {
+        setError(loginError.message)
+        return
+      }
+
+      onLogin()
     } catch {
       setError('Unable to sign in right now. Please try again.')
     } finally {
-     setLoading(false)
-     }
+      setLoading(false)
+      setLoadingAction(null)
+    }
   }
 
+  async function handleForgotPassword() {
+    setError('')
+    setResetMessage('')
 
-   return (
+    if (!email.trim()) {
+      setError('Please enter your email address first.')
+      return
+    }
+
+    setLoading(true)
+    setLoadingAction('reset')
+
+    try {
+      const { error: resetError } =
+        await supabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo: window.location.origin,
+        })
+
+      if (resetError) {
+        setError(resetError.message)
+        return
+      }
+
+      setResetMessage(
+        'If an account exists for this email, a password reset link will be sent. Please check your inbox and spam folder.',
+      )
+    } catch {
+      setError('Unable to send the reset email. Please try again.')
+    } finally {
+      setLoading(false)
+      setLoadingAction(null)
+    }
+  }
+
+  return (
     <main className="flex min-h-screen items-center justify-center bg-slate-100 px-4 py-10">
       <section className="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-xl">
         <div className="bg-slate-900 px-8 py-8 text-center">
@@ -94,7 +130,11 @@ function Login({ onLogin, onSignup }: LoginProps) {
                 type="email"
                 autoComplete="email"
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                onChange={(event) => {
+                  setEmail(event.target.value)
+                  setResetMessage('')
+                  setError('')
+                }}
                 placeholder="you@example.com"
                 required
                 className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
@@ -130,21 +170,50 @@ function Login({ onLogin, onSignup }: LoginProps) {
                   {showPassword ? 'Hide' : 'Show'}
                 </button>
               </div>
+
+              <div className="mt-2 text-right">
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  disabled={loading}
+                  className="text-sm font-semibold text-blue-600 hover:text-blue-800 disabled:opacity-60"
+                >
+                  {loadingAction === 'reset'
+                    ? 'Sending reset link...'
+                    : 'Forgot password?'}
+                </button>
+              </div>
             </div>
 
             {error && (
-              <p role="alert" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+              <p
+                role="alert"
+                className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800"
+              >
                 {error}
               </p>
             )}
 
-           <button
-             type="submit"
-             disabled={loading}
-             className="w-full rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+            {resetMessage && (
+              <p
+                role="status"
+                className="rounded-lg bg-green-50 p-3 text-sm text-green-800"
+              >
+                {resetMessage}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
             >
-            {loading ? 'Signing in...' : 'Sign in'}
-           </button>
+              {loadingAction === 'login'
+                ? 'Signing in...'
+                : loading
+                  ? 'Please wait...'
+                  : 'Sign in'}
+            </button>
           </form>
 
           <p className="mt-6 text-center text-sm text-slate-500">
