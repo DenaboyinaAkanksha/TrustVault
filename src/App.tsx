@@ -3,6 +3,7 @@ import Login from './Login'
 import Signup from './Signup'
 import { supabase } from './lib/supabase'
 import {
+  getMyDocumentPermission,
   listDocumentAccess,
   revokeDocumentAccess,
   shareDocument,
@@ -14,6 +15,7 @@ import {
   downloadDocument,
   listDocuments,
   uploadDocument,
+  updateDocumentDetails
 } from './lib/documentService'
 
 import { listAuditLogs, type AuditLog } from './lib/auditService'
@@ -72,6 +74,7 @@ function App() {
   const [documents, setDocuments] = useState(initialDocuments)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [currentUserName, setCurrentUserName] = useState('')
   const [currentPage, setCurrentPage] = useState<'login' | 'signup'>('login')
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null)
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
@@ -80,7 +83,17 @@ function App() {
   const [authLoading, setAuthLoading] = useState(true)
   const [shareFormOpen, setShareFormOpen] = useState(false)
   const [documentAccessList, setDocumentAccessList] = useState<DocumentAccess[]>([])
+  const [myDocumentPermission, setMyDocumentPermission] = useState<
+    'owner' | 'read' | 'edit' | null
+  >(null)
+
+  const [permissionLoading, setPermissionLoading] = useState(false)
   const [recipientEmail, setRecipientEmail] = useState('')
+  const [editFormOpen, setEditFormOpen] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [editFolder, setEditFolder] = useState('')
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState('')
   const [sharePermission, setSharePermission] = useState<'read' | 'edit'>('read')
 
 
@@ -124,7 +137,22 @@ function App() {
     }
   }, [isLoggedIn])
 
+  function openEditForm() {
+    if (!selectedDocument) return
 
+    if (
+      myDocumentPermission !== 'owner' &&
+      myDocumentPermission !== 'edit'
+    ) {
+      window.alert('You do not have permission to edit this document.')
+      return
+    }
+
+    setEditName(selectedDocument.name)
+    setEditFolder(selectedDocument.folder)
+    setEditError('')
+    setEditFormOpen(true)
+  }
   async function handleSignOut() {
     const { error } = await supabase.auth.signOut()
 
@@ -136,26 +164,26 @@ function App() {
     setIsLoggedIn(false)
     setCurrentPage('login')
   }
-  
 
 
-async function loadAuditLogs() {
-  setAuditLoading(true)
 
-  try {
-    const logs = await listAuditLogs()
-    setAuditLogs(logs)
-  } catch (error) {
-    console.error('Error loading audit trail:', error)
-    alert(
-      error instanceof Error
-        ? error.message
-        : 'Could not load audit trail.',
-    )
-  } finally {
-    setAuditLoading(false)
+  async function loadAuditLogs() {
+    setAuditLoading(true)
+
+    try {
+      const logs = await listAuditLogs()
+      setAuditLogs(logs)
+    } catch (error) {
+      console.error('Error loading audit trail:', error)
+      alert(
+        error instanceof Error
+          ? error.message
+          : 'Could not load audit trail.',
+      )
+    } finally {
+      setAuditLoading(false)
+    }
   }
-}
   useEffect(() => {
     let mounted = true
 
@@ -170,6 +198,12 @@ async function loadAuditLogs() {
       } else {
         setIsLoggedIn(Boolean(data.session))
         setCurrentUserId(data.session?.user.id ?? null)
+        setCurrentUserName(
+          data.session?.user.user_metadata?.full_name ||
+          data.session?.user.user_metadata?.name ||
+          data.session?.user.email ||
+          '',
+      )
       }
 
       setAuthLoading(false)
@@ -182,6 +216,12 @@ async function loadAuditLogs() {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsLoggedIn(Boolean(session))
       setCurrentUserId(session?.user.id ?? null)
+      setCurrentUserName(
+        session?.user.user_metadata?.full_name ||
+        session?.user.user_metadata?.name ||
+        session?.user.email ||
+          '',
+      )
       setAuthLoading(false)
     })
     return () => {
@@ -259,9 +299,9 @@ async function loadAuditLogs() {
 
           <button
             onClick={() => {
-            setCurrentView('documents')
-            setActiveFolder('All Documents')
-          }}
+              setCurrentView('documents')
+              setActiveFolder('All Documents')
+            }}
             className={`flex items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium ${activeFolder === 'All Documents' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'}`}
           >
             <span>▦</span> All Documents
@@ -294,14 +334,17 @@ async function loadAuditLogs() {
       <main className="min-w-0 flex-1 p-5 sm:p-8 lg:p-10">
 
         <header className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight text-slate-900">
-              My Documents
-            </h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Manage and organize your important files.
-            </p>
-          </div>
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight text-slate-900">
+                My Documents
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Manage and organize your important files.
+              </p>
+              <p className="mt-2 text-sm font-medium text-slate-600">
+                Signed in as: {currentUserName || 'User'}
+              </p>
+            </div>
 
           <div className="flex items-center gap-4">
             <button
@@ -342,7 +385,7 @@ async function loadAuditLogs() {
               <div className="mt-6 overflow-x-auto">
                 <table className="w-full min-w-[650px] text-left text-sm">
                   <thead>
-                    
+
                     <tr className="border-b border-slate-100 text-xs uppercase tracking-wider text-slate-400">
                       <th className="pb-4 pr-4 font-medium">Date and time</th>
                       <th className="pb-4 pr-4 font-medium">Action</th>
@@ -386,163 +429,177 @@ async function loadAuditLogs() {
           </section>
         ) : (
           <>
-        {showUploadForm && (
-          <UploadForm
-            onCancel={() => setShowUploadForm(false)}
-            onUpload={(newDocument) => {
-              setDocuments((currentDocuments) => [
-                newDocument,
-                ...currentDocuments,
-              ])
-              setActiveFolder('All Documents')
-              setSearch('')
-            }}
-          />
-        )}
+            {showUploadForm && (
+              <UploadForm
+                onCancel={() => setShowUploadForm(false)}
+                onUpload={(newDocument) => {
+                  setDocuments((currentDocuments) => [
+                    newDocument,
+                    ...currentDocuments,
+                  ])
+                  setActiveFolder('All Documents')
+                  setSearch('')
+                }}
+              />
+            )}
 
 
 
-        <section className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {folders.map((folder) => (
-            <button
-              key={folder.name}
-              onClick={() => setActiveFolder(folder.name)}
-              className={`rounded-2xl border bg-white p-5 text-left transition hover:-translate-y-0.5 hover:shadow-md ${activeFolder === folder.name ? 'border-blue-300 ring-2 ring-blue-100' : 'border-slate-200'}`}
-            >
-              <div className="mb-4 flex items-center justify-between">
-                <span className={`flex h-11 w-11 items-center justify-center rounded-xl text-2xl ${folder.color}`}>📁</span>
-                <span className="text-xs text-slate-400">{folderCount(folder.name)} files</span>
+            <section className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {folders.map((folder) => (
+                <button
+                  key={folder.name}
+                  onClick={() => setActiveFolder(folder.name)}
+                  className={`rounded-2xl border bg-white p-5 text-left transition hover:-translate-y-0.5 hover:shadow-md ${activeFolder === folder.name ? 'border-blue-300 ring-2 ring-blue-100' : 'border-slate-200'}`}
+                >
+                  <div className="mb-4 flex items-center justify-between">
+                    <span className={`flex h-11 w-11 items-center justify-center rounded-xl text-2xl ${folder.color}`}>📁</span>
+                    <span className="text-xs text-slate-400">{folderCount(folder.name)} files</span>
+                  </div>
+                  <h3 className="font-semibold">{folder.name}</h3>
+                  <p className="mt-1 text-sm text-slate-500">{folder.description}</p>
+                </button>
+              ))}
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
+              <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                <div>
+                  <h3 className="text-lg font-bold">
+                    {activeFolder === 'All Documents' ? 'All Documents' : activeFolder}
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {visibleDocuments.length} sample {visibleDocuments.length === 1 ? 'document' : 'documents'}
+                  </p>
+                </div>
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search documents..."
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 sm:max-w-xs"
+                />
               </div>
-              <h3 className="font-semibold">{folder.name}</h3>
-              <p className="mt-1 text-sm text-slate-500">{folder.description}</p>
-            </button>
-          ))}
-        </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
-          <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-            <div>
-              <h3 className="text-lg font-bold">
-                {activeFolder === 'All Documents' ? 'All Documents' : activeFolder}
-              </h3>
-              <p className="mt-1 text-sm text-slate-500">
-                {visibleDocuments.length} sample {visibleDocuments.length === 1 ? 'document' : 'documents'}
-              </p>
-            </div>
-            <input
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search documents..."
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 sm:max-w-xs"
-            />
-          </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[520px] text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100 text-xs uppercase tracking-wider text-slate-400">
+                      <th className="pb-4 font-medium">Document name</th>
+                      <th className="pb-4 font-medium">Folder</th>
+                      <th className="pb-4 font-medium">Size</th>
+                      <th className="pb-4 font-medium">Date added</th>
+                    </tr>
+                  </thead>
+                  <tbody>
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[520px] text-left text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 text-xs uppercase tracking-wider text-slate-400">
-                  <th className="pb-4 font-medium">Document name</th>
-                  <th className="pb-4 font-medium">Folder</th>
-                  <th className="pb-4 font-medium">Size</th>
-                  <th className="pb-4 font-medium">Date added</th>
-                </tr>
-              </thead>
-              <tbody>
+                    {visibleDocuments.map((document) => (
+                      <tr
+                        key={document.id}
+                        className="border-b border-slate-50 last:border-0 hover:bg-slate-50"
+                      >
+                        <td className="py-4 pr-4">
+                          <div className="flex items-center gap-3">
+                            <FileTypeBadge fileName={document.name} />
 
-                {visibleDocuments.map((document) => (
-                  <tr
-                    key={document.id}
-                    className="border-b border-slate-50 last:border-0 hover:bg-slate-50"
-                  >
-                    <td className="py-4 pr-4">
-                      <div className="flex items-center gap-3">
-                        <FileTypeBadge fileName={document.name} />
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            setSelectedDocument(document)
-                            setDocumentAccessList([])
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                setSelectedDocument(document)
+                                setDocumentAccessList([])
+                                setMyDocumentPermission(null)
+                                setPermissionLoading(true)
 
-                            if (document.owner_id === currentUserId) {
-                              try {
-                                const accessList = await listDocumentAccess(document.id)
-                                setDocumentAccessList(accessList)
-                              } catch (error) {
-                                console.error('Failed to load document access:', error)
-                                window.alert(
-                                  error instanceof Error
-                                    ? error.message
-                                    : 'Could not load document access.',
+                                try {
+                                  const permission = await getMyDocumentPermission(document.id)
+                                  console.log('Document permission check:', {
+                                    documentId: document.id,
+                                    signedInUserId: currentUserId,
+                                    permission,
+                                  })
+                                  setMyDocumentPermission(permission)
+
+                                  if (document.owner_id === currentUserId) {
+                                    const accessList = await listDocumentAccess(document.id)
+                                    setDocumentAccessList(accessList)
+                                  }
+                                } catch (error) {
+                                  console.error('Failed to load document permissions:', error)
+                                  window.alert(
+                                    error instanceof Error
+                                      ? error.message
+                                      : 'Could not load document permissions.',
+                                  )
+                                } finally {
+                                  setPermissionLoading(false)
+                                }
+                              }}
+                              className="text-left font-medium text-slate-700 hover:text-blue-600 hover:underline"
+                            >
+                              {document.name}
+                            </button>
+
+                          </div>
+                        </td>
+
+                        <td className="py-4 text-slate-500">{document.folder}</td>
+                        <td className="py-4 text-slate-500">{document.size}</td>
+                        <td className="py-4 text-slate-500">{document.date}</td>
+
+                        <td className="py-4 text-right">
+                          {document.owner_id === currentUserId && (
+
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const confirmed = window.confirm(
+                                  `Are you sure you want to delete "${document.name}"?`,
                                 )
-                              }
-                            }
-                          }}
-                          className="text-left font-medium text-slate-700 hover:text-blue-600 hover:underline"
-                        >
-                          {document.name}
-                        </button>
-                      </div>
-                    </td>
 
-                    <td className="py-4 text-slate-500">{document.folder}</td>
-                    <td className="py-4 text-slate-500">{document.size}</td>
-                    <td className="py-4 text-slate-500">{document.date}</td>
+                                if (!confirmed) return
 
-                    <td className="py-4 text-right">
-                      {document.owner_id === currentUserId && (
+                                try {
+                                  await deleteDocument(String(document.id))
 
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const confirmed = window.confirm(
-                              `Are you sure you want to delete "${document.name}"?`,
-                            )
+                                  setDocuments((currentDocuments) =>
+                                    currentDocuments.filter(
+                                      (item) => item.id !== document.id,
+                                    ),
+                                  )
+                                } catch (error) {
+                                  console.error('Failed to delete document:', error)
 
-                            if (!confirmed) return
+                                  window.alert(
+                                    error instanceof Error
+                                      ? error.message
+                                      : 'Could not delete the document. Please try again.',
+                                  )
+                                }
+                              }}
+                              className="rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+                            >
+                              Delete
+                            </button>
+                          )}
 
-                            try {
-                              await deleteDocument(String(document.id))
+                        </td>
+                      </tr>
+                    ))}
 
-                              setDocuments((currentDocuments) =>
-                                currentDocuments.filter(
-                                  (item) => item.id !== document.id,
-                                ),
-                              )
-                            } catch (error) {
-                              console.error('Failed to delete document:', error)
-
-                              window.alert(
-                                error instanceof Error
-                                  ? error.message
-                                  : 'Could not delete the document. Please try again.',
-                              )
-                            }
-                          }}
-                          className="rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
-                        >
-                          Delete
-                        </button>
-                      )}
-
-                    </td>
-                  </tr>
-                ))}
-
-                {visibleDocuments.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="py-10 text-center text-slate-500">
-                      No documents found. Try another search.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                    {visibleDocuments.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="py-10 text-center text-slate-500">
+                          No documents found. Try another search.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
 
 
-               </section>
-               </>
+            </section>
+          </>
         )}
       </main>
 
@@ -634,6 +691,141 @@ async function loadAuditLogs() {
                 Download document
               </button>
 
+
+              {(myDocumentPermission === 'owner' ||
+                myDocumentPermission === 'edit') &&
+                !permissionLoading && (
+                  <div className="mt-4">
+                    {!editFormOpen ? (
+                      <button
+                        type="button"
+                        onClick={openEditForm}
+                        className="w-full rounded-xl border border-blue-600 px-4 py-3 text-sm font-semibold text-blue-600 hover:bg-blue-50"
+                      >
+                        Edit document details
+                      </button>
+                    ) : (
+                      <form
+                        className="space-y-4 rounded-xl border border-slate-200 p-4"
+                        onSubmit={async (event) => {
+                          event.preventDefault()
+
+                          if (!selectedDocument || editSaving) return
+
+                          setEditSaving(true)
+                          setEditError('')
+
+                          try {
+                            await updateDocumentDetails(
+                              selectedDocument.id,
+                              editName,
+                              editFolder,
+                            )
+
+                            const updatedDocument = {
+                              ...selectedDocument,
+                              name: editName.trim(),
+                              folder: editFolder,
+                            }
+
+                            setSelectedDocument(updatedDocument)
+
+                            setDocuments((currentDocuments) =>
+                              currentDocuments.map((document) =>
+                                document.id === updatedDocument.id
+                                  ? { ...document, ...updatedDocument }
+                                  : document,
+                              ),
+                            )
+
+                            setEditFormOpen(false)
+                            window.alert('Document details updated successfully.')
+                          } catch (error) {
+                            setEditError(
+                              error instanceof Error
+                                ? error.message
+                                : 'Could not update document details.',
+                            )
+                          } finally {
+                            setEditSaving(false)
+                          }
+                        }}
+                      >
+                        <h3 className="text-sm font-semibold text-slate-800">
+                          Edit document details
+                        </h3>
+
+                        <div>
+                          <label
+                            htmlFor="edit-document-name"
+                            className="mb-1 block text-sm font-medium text-slate-700"
+                          >
+                            Document name
+                          </label>
+                          <input
+                            id="edit-document-name"
+                            type="text"
+                            value={editName}
+                            onChange={(event) => setEditName(event.target.value)}
+                            required
+                            maxLength={255}
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                          />
+                        </div>
+
+                        <div>
+                          <label
+                            htmlFor="edit-document-folder"
+                            className="mb-1 block text-sm font-medium text-slate-700"
+                          >
+                            Folder
+                          </label>
+                          <select
+                            id="edit-document-folder"
+                            value={editFolder}
+                            onChange={(event) => setEditFolder(event.target.value)}
+                            required
+                            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                          >
+                            <option>Employment Documents</option>
+                            <option>Payslips</option>
+                            <option>Salary &amp; Hike Letters</option>
+                            <option>Tax Documents</option>
+                            <option>Benefits &amp; Insurance</option>
+                          </select>
+                        </div>
+
+                        {editError && (
+                          <p role="alert" className="text-sm text-red-600">
+                            {editError}
+                          </p>
+                        )}
+
+                        <div className="flex gap-3">
+                          <button
+                            type="submit"
+                            disabled={editSaving}
+                            className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                          >
+                            {editSaving ? 'Saving...' : 'Save changes'}
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={editSaving}
+                            onClick={() => {
+                              setEditFormOpen(false)
+                              setEditError('')
+                            }}
+                            className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-60"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    )}
+                  </div>
+                )}
 
               {shareFormOpen && selectedDocument.owner_id === currentUserId && (
                 <form
@@ -739,48 +931,53 @@ async function loadAuditLogs() {
                           key={access.user_id}
                           className="flex items-center justify-between gap-3"
                         >
-                          
-                        <div>
-                          <p className="text-sm font-medium text-gray-700">
-                            User: {access.user_id}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            Permission: {access.permission === 'read' ? 'Read only' : 'Can edit'}
-                          </p>
-                        </div>
 
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const confirmed = window.confirm(
-                              'Are you sure you want to revoke this user’s access?',
-                            )
 
-                            if (!confirmed) return
+                          <div>
+                            <p className="text-sm font-medium text-gray-700">
+                              {access.full_name || 'Name unavailable'}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {access.email || 'Email unavailable'}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              Permission: {access.permission === 'read' ? 'Read only' : 'Can edit'}
+                            </p>
+                          </div>
 
-                            try {
-                              await revokeDocumentAccess(
-                                selectedDocument.id,
-                                access.user_id,
+
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const confirmed = window.confirm(
+                                'Are you sure you want to revoke this user’s access?',
                               )
 
-                              setDocumentAccessList((current) =>
-                                current.filter((item) => item.user_id !== access.user_id),
-                              )
+                              if (!confirmed) return
 
-                              window.alert('Access revoked successfully.')
-                            } catch (error) {
-                              window.alert(
-                                error instanceof Error
-                                  ? error.message
-                                  : 'Could not revoke access.',
-                              )
-                            }
-                          }}
-                          className="rounded-lg border border-red-300 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
-                        >
-                          Revoke access
-                        </button>
+                              try {
+                                await revokeDocumentAccess(
+                                  selectedDocument.id,
+                                  access.user_id,
+                                )
+
+                                setDocumentAccessList((current) =>
+                                  current.filter((item) => item.user_id !== access.user_id),
+                                )
+
+                                window.alert('Access revoked successfully.')
+                              } catch (error) {
+                                window.alert(
+                                  error instanceof Error
+                                    ? error.message
+                                    : 'Could not revoke access.',
+                                )
+                              }
+                            }}
+                            className="rounded-lg border border-red-300 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+                          >
+                            Revoke access
+                          </button>
 
                         </div>
                       ))}

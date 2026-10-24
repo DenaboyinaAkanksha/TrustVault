@@ -159,6 +159,36 @@ export async function listDocuments(): Promise<StoredDocument[]> {
    return (response.data ?? []) as StoredDocument[]
 
 }
+export async function updateDocumentDetails(
+  documentId: string,
+  name: string,
+  folder: string,
+): Promise<void> {
+  const trimmedName = name.trim()
+  const trimmedFolder = folder.trim()
+
+  if (!trimmedName) {
+    throw new Error('Document name cannot be empty.')
+  }
+
+  if (!trimmedFolder) {
+    throw new Error('Folder cannot be empty.')
+  }
+
+  const { error } = await supabase
+    .from('documents')
+    .update({
+      name: trimmedName,
+      folder: trimmedFolder,
+    })
+    .eq('id', documentId)
+
+  if (error) {
+    throw new Error(
+      `Could not update document details: ${error.message}`,
+    )
+  }
+}
 
 
 export async function downloadDocument(

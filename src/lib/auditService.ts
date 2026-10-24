@@ -13,6 +13,7 @@ export type AuditLog = {
     | 'share'
     | 'permission_change'
     | 'revoke'
+    | 'edit'
   target_user_id: string | null
   details: Record<string, unknown>
   created_at: string

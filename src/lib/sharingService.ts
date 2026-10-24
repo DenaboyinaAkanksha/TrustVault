@@ -1,4 +1,3 @@
-
 import { supabase } from './supabase'
 
 export type SharePermission = 'read' | 'edit'
@@ -20,63 +19,124 @@ export async function shareDocument(
   )
 
   if (error) {
-    console.error('Share function error:', error)
+  const response = error.context
+  let details = error.message
 
-    if (error.context instanceof Response) {
-      const response = error.context.clone()
-
-      let responseBody = ''
-
-      try {
-        responseBody = await response.text()
-      } catch {
-        responseBody = 'Could not read server response.'
-      }
-
-      throw new Error(
-        `Share failed (HTTP ${response.status}): ${responseBody}`,
-      )
+    if (response instanceof Response) {
+        const responseBody = await response.clone().text()
+        details = `${error.message} — HTTP ${response.status}: ${responseBody}`
     }
 
+    throw new Error(details)
+    }
+
+  if (!data?.success) {
+    throw new Error(data?.error || 'Could not share the document.')
+  }
+}
+
+export async function revokeDocumentAccess(
+  documentId: string,
+  recipientUserId: string,
+): Promise<void> {
+  const { data, error } = await supabase.functions.invoke(
+    'revoke-document-access',
+    {
+      body: {
+        document_id: documentId,
+        recipient_user_id: recipientUserId,
+      },
+    },
+  )
+
+  if (error) {
     throw new Error(error.message)
   }
 
   if (!data?.success) {
     throw new Error(
-      data?.error || 'Could not share the document.',
+      data?.error || 'Could not revoke document access.',
     )
   }
 }
 
-
 export type DocumentAccess = {
-  document_id: string
   user_id: string
-  permission: 'read' | 'edit'
+  permission: SharePermission
+  created_at: string
+  full_name: string
+  email: string
 }
+
 
 export async function listDocumentAccess(
   documentId: string,
 ): Promise<DocumentAccess[]> {
-  const { data, error } = await supabase
-    .from('document_access')
-    .select('document_id, user_id, permission')
-    .eq('document_id', documentId)
+  const { data, error } = await supabase.rpc(
+    'list_document_access_with_users',
+    {
+      p_document_id: documentId,
+    },
+  )
 
-  if (error) throw error
+  if (error) {
+    throw new Error(
+      `Could not load document access: ${error.message}`,
+    )
+  }
 
   return (data ?? []) as DocumentAccess[]
 }
-
-export async function revokeDocumentAccess(
+export async function getMyDocumentPermission(
   documentId: string,
-  userId: string,
-): Promise<void> {
-  const { error } = await supabase
-    .from('document_access')
-    .delete()
-    .eq('document_id', documentId)
-    .eq('user_id', userId)
+): Promise<'owner' | 'read' | 'edit' | null> {
+  const { data: userData, error: userError } =
+    await supabase.auth.getUser()
 
-  if (error) throw error
+  if (userError || !userData.user) {
+    throw new Error('Please sign in to check document permissions.')
+  }
+
+  const { data: document, error: documentError } = await supabase
+    .from('documents')
+    .select('owner_id')
+    .eq('id', documentId)
+    .maybeSingle()
+
+  if (documentError) {
+    throw new Error(
+      `Could not check document ownership: ${documentError.message}`,
+    )
+  }
+
+  if (!document) {
+    return null
+  }
+
+  if (document.owner_id === userData.user.id) {
+    return 'owner'
+  }
+
+  const { data: access, error: accessError } = await supabase
+    .from('document_access')
+    .select('permission')
+    .eq('document_id', documentId)
+    .eq('user_id', userData.user.id)
+    .maybeSingle()
+
+  if (accessError) {
+    throw new Error(
+      `Could not check sharing permission: ${accessError.message}`,
+    )
+  }
+
+  if (access?.permission === 'edit') {
+    return 'edit'
+  }
+
+  if (access?.permission === 'read') {
+    return 'read'
+  }
+
+  return null
 }
