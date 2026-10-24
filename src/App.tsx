@@ -2,7 +2,12 @@ import { useEffect, useState } from 'react'
 import Login from './Login'
 import Signup from './Signup'
 import { supabase } from './lib/supabase'
-import { shareDocument } from './lib/sharingService'
+import {
+  listDocumentAccess,
+  revokeDocumentAccess,
+  shareDocument,
+  type DocumentAccess,
+} from './lib/sharingService'
 
 import {
   deleteDocument,
@@ -11,9 +16,12 @@ import {
   uploadDocument,
 } from './lib/documentService'
 
+import { listAuditLogs, type AuditLog } from './lib/auditService'
+
 
 type Document = {
   id: string
+  owner_id: string
   name: string
   type: string
   size: string
@@ -59,14 +67,19 @@ const initialDocuments: Document[] = []
 
 function App() {
   const [activeFolder, setActiveFolder] = useState('All Documents')
+  const [currentView, setCurrentView] = useState<'documents' | 'audit'>('documents')
   const [search, setSearch] = useState('')
   const [documents, setDocuments] = useState(initialDocuments)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState<'login' | 'signup'>('login')
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null)
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
+  const [auditLoading, setAuditLoading] = useState(false)
   const [showUploadForm, setShowUploadForm] = useState(false)
   const [authLoading, setAuthLoading] = useState(true)
   const [shareFormOpen, setShareFormOpen] = useState(false)
+  const [documentAccessList, setDocumentAccessList] = useState<DocumentAccess[]>([])
   const [recipientEmail, setRecipientEmail] = useState('')
   const [sharePermission, setSharePermission] = useState<'read' | 'edit'>('read')
 
@@ -90,6 +103,7 @@ function App() {
 
         const formattedDocuments = storedDocuments.map((document) => ({
           id: document.id,
+          owner_id: document.owner_id,
           name: document.name,
           type: document.mime_type,
           size: `${(document.size_bytes / (1024 * 1024)).toFixed(2)} MB`,
@@ -122,7 +136,26 @@ function App() {
     setIsLoggedIn(false)
     setCurrentPage('login')
   }
+  
 
+
+async function loadAuditLogs() {
+  setAuditLoading(true)
+
+  try {
+    const logs = await listAuditLogs()
+    setAuditLogs(logs)
+  } catch (error) {
+    console.error('Error loading audit trail:', error)
+    alert(
+      error instanceof Error
+        ? error.message
+        : 'Could not load audit trail.',
+    )
+  } finally {
+    setAuditLoading(false)
+  }
+}
   useEffect(() => {
     let mounted = true
 
@@ -133,8 +166,10 @@ function App() {
 
       if (error) {
         setIsLoggedIn(false)
+        setCurrentUserId(null)
       } else {
         setIsLoggedIn(Boolean(data.session))
+        setCurrentUserId(data.session?.user.id ?? null)
       }
 
       setAuthLoading(false)
@@ -146,9 +181,9 @@ function App() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsLoggedIn(Boolean(session))
+      setCurrentUserId(session?.user.id ?? null)
       setAuthLoading(false)
     })
-
     return () => {
       mounted = false
       subscription.unsubscribe()
@@ -208,8 +243,25 @@ function App() {
 
         <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Workspace</p>
         <nav className="flex flex-wrap gap-2 md:flex-col">
+
           <button
-            onClick={() => setActiveFolder('All Documents')}
+            type="button"
+            onClick={() => {
+              setCurrentView('audit')
+              void loadAuditLogs()
+              setSelectedDocument(null)
+            }}
+            className="flex items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium text-slate-600 hover:bg-slate-100"
+          >
+            <span>📋</span>
+            Audit Trail
+          </button>
+
+          <button
+            onClick={() => {
+            setCurrentView('documents')
+            setActiveFolder('All Documents')
+          }}
             className={`flex items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium ${activeFolder === 'All Documents' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'}`}
           >
             <span>▦</span> All Documents
@@ -217,7 +269,10 @@ function App() {
           {folders.map((folder) => (
             <button
               key={folder.name}
-              onClick={() => setActiveFolder(folder.name)}
+              onClick={() => {
+                setCurrentView('documents')
+                setActiveFolder(folder.name)
+              }}
               className={`flex items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium ${activeFolder === folder.name ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'}`}
             >
               <span className="text-lg">📁</span>
@@ -267,7 +322,70 @@ function App() {
             </button>
           </div>
         </header>
+        {currentView === 'audit' ? (
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
+            <h3 className="text-lg font-bold">Audit Trail</h3>
+            <p className="mt-2 text-sm text-slate-500">
+              Recent activity involving your documents.
+            </p>
 
+
+            {auditLoading ? (
+              <p className="py-8 text-center text-sm text-slate-500">
+                Loading audit records...
+              </p>
+            ) : auditLogs.length === 0 ? (
+              <p className="py-8 text-center text-sm text-slate-500">
+                No audit records found.
+              </p>
+            ) : (
+              <div className="mt-6 overflow-x-auto">
+                <table className="w-full min-w-[650px] text-left text-sm">
+                  <thead>
+                    
+                    <tr className="border-b border-slate-100 text-xs uppercase tracking-wider text-slate-400">
+                      <th className="pb-4 pr-4 font-medium">Date and time</th>
+                      <th className="pb-4 pr-4 font-medium">Action</th>
+                      <th className="pb-4 pr-4 font-medium">User</th>
+                      <th className="pb-4 pr-4 font-medium">Email</th>
+                      <th className="pb-4 font-medium">Document</th>
+                    </tr>
+
+                  </thead>
+                  <tbody>
+                    {auditLogs.map((log) => (
+                      <tr
+                        key={log.id}
+                        className="border-b border-slate-50 last:border-0"
+                      >
+                        <td className="py-4 pr-4 text-slate-500">
+                          {new Date(log.created_at).toLocaleString()}
+                        </td>
+                        <td className="py-4 pr-4">
+                          <span className="rounded-lg bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">
+                            {log.action.replace('_', ' ')}
+                          </span>
+                        </td>
+
+                        <td className="py-4 pr-4 font-medium text-slate-700">
+                          {log.actor_name || 'Unknown user'}
+                        </td>
+                        <td className="py-4 pr-4 text-slate-500">
+                          {log.actor_email || 'Unavailable'}
+                        </td>
+                        <td className="py-4 break-words font-medium text-slate-700">
+                          {log.document_name}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+          </section>
+        ) : (
+          <>
         {showUploadForm && (
           <UploadForm
             onCancel={() => setShowUploadForm(false)}
@@ -342,7 +460,24 @@ function App() {
                         <FileTypeBadge fileName={document.name} />
                         <button
                           type="button"
-                          onClick={() => setSelectedDocument(document)}
+                          onClick={async () => {
+                            setSelectedDocument(document)
+                            setDocumentAccessList([])
+
+                            if (document.owner_id === currentUserId) {
+                              try {
+                                const accessList = await listDocumentAccess(document.id)
+                                setDocumentAccessList(accessList)
+                              } catch (error) {
+                                console.error('Failed to load document access:', error)
+                                window.alert(
+                                  error instanceof Error
+                                    ? error.message
+                                    : 'Could not load document access.',
+                                )
+                              }
+                            }
+                          }}
                           className="text-left font-medium text-slate-700 hover:text-blue-600 hover:underline"
                         >
                           {document.name}
@@ -355,38 +490,40 @@ function App() {
                     <td className="py-4 text-slate-500">{document.date}</td>
 
                     <td className="py-4 text-right">
+                      {document.owner_id === currentUserId && (
 
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const confirmed = window.confirm(
-                            `Are you sure you want to delete "${document.name}"?`,
-                          )
-
-                          if (!confirmed) return
-
-                          try {
-                            await deleteDocument(String(document.id))
-
-                            setDocuments((currentDocuments) =>
-                              currentDocuments.filter(
-                                (item) => item.id !== document.id,
-                              ),
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const confirmed = window.confirm(
+                              `Are you sure you want to delete "${document.name}"?`,
                             )
-                          } catch (error) {
-                            console.error('Failed to delete document:', error)
 
-                            window.alert(
-                              error instanceof Error
-                                ? error.message
-                                : 'Could not delete the document. Please try again.',
-                            )
-                          }
-                        }}
-                        className="rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
-                      >
-                        Delete
-                      </button>
+                            if (!confirmed) return
+
+                            try {
+                              await deleteDocument(String(document.id))
+
+                              setDocuments((currentDocuments) =>
+                                currentDocuments.filter(
+                                  (item) => item.id !== document.id,
+                                ),
+                              )
+                            } catch (error) {
+                              console.error('Failed to delete document:', error)
+
+                              window.alert(
+                                error instanceof Error
+                                  ? error.message
+                                  : 'Could not delete the document. Please try again.',
+                              )
+                            }
+                          }}
+                          className="rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+                        >
+                          Delete
+                        </button>
+                      )}
 
                     </td>
                   </tr>
@@ -404,7 +541,9 @@ function App() {
           </div>
 
 
-        </section>
+               </section>
+               </>
+        )}
       </main>
 
       {selectedDocument && (
@@ -496,10 +635,10 @@ function App() {
               </button>
 
 
-              {shareFormOpen && (
+              {shareFormOpen && selectedDocument.owner_id === currentUserId && (
                 <form
                   className="mt-4 space-y-4 rounded-xl border border-gray-200 p-4"
-                  
+
                   onSubmit={async (event) => {
                     event.preventDefault()
 
@@ -572,17 +711,83 @@ function App() {
 
 
 
-              
-              <button
-                type="button"
-                onClick={() => setShareFormOpen((open) => !open)}
-                className="mt-3 w-full rounded-xl border border-blue-600 px-4 py-3 text-sm font-semibold text-blue-600 hover:bg-blue-50"
-              >
-                {shareFormOpen ? 'Cancel sharing' : 'Share document'}
-              </button>
 
+              {selectedDocument.owner_id === currentUserId && (
+                <button
+                  type="button"
+                  onClick={() => setShareFormOpen((open) => !open)}
+                  className="mt-3 w-full rounded-xl border border-blue-600 px-4 py-3 text-sm font-semibold text-blue-600 hover:bg-blue-50"
+                >
+                  {shareFormOpen ? 'Cancel sharing' : 'Share document'}
+                </button>
+              )}
 
+              {selectedDocument.owner_id === currentUserId && (
+                <div className="mt-6 rounded-xl border border-gray-200 p-4">
+                  <h3 className="mb-3 text-sm font-semibold text-gray-800">
+                    People with access
+                  </h3>
 
+                  {documentAccessList.length === 0 ? (
+                    <p className="text-sm text-gray-500">
+                      No one else has access to this document yet.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {documentAccessList.map((access) => (
+                        <div
+                          key={access.user_id}
+                          className="flex items-center justify-between gap-3"
+                        >
+                          
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">
+                            User: {access.user_id}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            Permission: {access.permission === 'read' ? 'Read only' : 'Can edit'}
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const confirmed = window.confirm(
+                              'Are you sure you want to revoke this user’s access?',
+                            )
+
+                            if (!confirmed) return
+
+                            try {
+                              await revokeDocumentAccess(
+                                selectedDocument.id,
+                                access.user_id,
+                              )
+
+                              setDocumentAccessList((current) =>
+                                current.filter((item) => item.user_id !== access.user_id),
+                              )
+
+                              window.alert('Access revoked successfully.')
+                            } catch (error) {
+                              window.alert(
+                                error instanceof Error
+                                  ? error.message
+                                  : 'Could not revoke access.',
+                              )
+                            }
+                          }}
+                          className="rounded-lg border border-red-300 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+                        >
+                          Revoke access
+                        </button>
+
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
 
@@ -652,6 +857,7 @@ function UploadForm({
 
             onUpload({
               id: savedDocument.id,
+              owner_id: savedDocument.owner_id,
               name: savedDocument.name,
               type: savedDocument.mime_type,
               size: formattedSize,
@@ -785,6 +991,9 @@ function UploadForm({
     </div>
   )
 }
+
+
+
 
 
 export default App

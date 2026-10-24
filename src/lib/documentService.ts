@@ -192,6 +192,21 @@ export async function downloadDocument(
   }
 
   const blob = await response.blob()
+  const { error: auditError } = await supabase.rpc(
+    'log_document_download',
+    {
+      p_document_id: documentId,
+    },
+  )
+
+  if (auditError) {
+    console.error('Download audit RPC failed:', auditError)
+    alert(`Download audit failed: ${auditError.message}`)
+    throw new Error(
+      `File downloaded, but audit logging failed: ${auditError.message}`,
+    )
+  }
+
   const blobUrl = URL.createObjectURL(blob)
   const link = window.document.createElement('a')
 

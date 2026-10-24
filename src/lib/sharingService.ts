@@ -1,3 +1,4 @@
+
 import { supabase } from './supabase'
 
 export type SharePermission = 'read' | 'edit'
@@ -19,18 +20,63 @@ export async function shareDocument(
   )
 
   if (error) {
-  const response = error.context
-  let details = error.message
+    console.error('Share function error:', error)
 
-    if (response instanceof Response) {
-        const responseBody = await response.clone().text()
-        details = `${error.message} — HTTP ${response.status}: ${responseBody}`
+    if (error.context instanceof Response) {
+      const response = error.context.clone()
+
+      let responseBody = ''
+
+      try {
+        responseBody = await response.text()
+      } catch {
+        responseBody = 'Could not read server response.'
+      }
+
+      throw new Error(
+        `Share failed (HTTP ${response.status}): ${responseBody}`,
+      )
     }
 
-    throw new Error(details)
-    }
+    throw new Error(error.message)
+  }
 
   if (!data?.success) {
-    throw new Error(data?.error || 'Could not share the document.')
+    throw new Error(
+      data?.error || 'Could not share the document.',
+    )
   }
+}
+
+
+export type DocumentAccess = {
+  document_id: string
+  user_id: string
+  permission: 'read' | 'edit'
+}
+
+export async function listDocumentAccess(
+  documentId: string,
+): Promise<DocumentAccess[]> {
+  const { data, error } = await supabase
+    .from('document_access')
+    .select('document_id, user_id, permission')
+    .eq('document_id', documentId)
+
+  if (error) throw error
+
+  return (data ?? []) as DocumentAccess[]
+}
+
+export async function revokeDocumentAccess(
+  documentId: string,
+  userId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('document_access')
+    .delete()
+    .eq('document_id', documentId)
+    .eq('user_id', userId)
+
+  if (error) throw error
 }
