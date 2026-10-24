@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 
+
 export type StoredDocument = {
   id: string
   owner_id: string
@@ -63,10 +64,12 @@ export async function uploadDocument(
     )
   }
 
-  if (insertError || !document) {
-    throw new Error(
-      insertError?.message ?? 'Could not save document details.',
-    )
+  if (insertError) {
+  throw new Error(String(insertError))
+  }
+
+  if (!document) {
+  throw new Error('Could not save document details.')
   }
 
   // Upload the actual file to the private Storage bucket.
@@ -95,4 +98,108 @@ export async function uploadDocument(
   }
 
   return document as StoredDocument
+}
+
+
+export async function deleteDocument(documentId: string): Promise<void> {
+  // Find the document and its Storage path.
+  const { data: document, error: fetchError } = await supabase
+    .from('documents')
+    .select('id, storage_path')
+    .eq('id', documentId)
+    .single()
+
+   
+  if (fetchError) {
+   console.error('Delete lookup failed:', fetchError)
+   throw new Error(`Could not look up document: ${fetchError.message}`)
+  }
+
+  if (!document) {
+   throw new Error(
+    'No document row was returned. Check the document ID and your Supabase access policies.',
+   )
+  }
+
+
+  // Delete the actual file from private Storage.
+  const { error: storageError } = await supabase.storage
+    .from('trustvault-documents')
+    .remove([document.storage_path])
+
+  if (storageError) {
+    throw new Error(`Could not delete the file: ${storageError.message}`)
+  }
+
+  // Delete its database record only after the file deletion succeeds.
+  const { error: deleteError } = await supabase
+    .from('documents')
+    .delete()
+    .eq('id', documentId)
+
+  if (deleteError) {
+    throw new Error(
+      `The file was deleted, but its database record could not be deleted: ${deleteError.message}`,
+    )
+  }
+}
+
+export async function listDocuments(): Promise<StoredDocument[]> {
+  const response = await supabase
+   .from('documents')
+   .select(
+     'id, owner_id, name, mime_type, size_bytes, folder, storage_path, created_at',
+    )
+    .order('created_at', { ascending: false })
+
+  if (response.error) {
+    throw new Error(`Could not load documents: ${response.error.message}`)
+  }
+
+   return (response.data ?? []) as StoredDocument[]
+
+}
+
+
+export async function downloadDocument(
+  documentId: string,
+): Promise<void> {
+  const { data: document, error: fetchError } = await supabase
+    .from('documents')
+    .select('name, storage_path')
+    .eq('id', documentId)
+    .single()
+
+  if (fetchError || !document) {
+    throw new Error(fetchError?.message ?? 'Document not found.')
+  }
+
+  const { data, error: downloadError } = await supabase.storage
+    .from('trustvault-documents')
+    .createSignedUrl(document.storage_path, 60)
+
+  if (downloadError || !data?.signedUrl) {
+    throw new Error(
+      downloadError?.message ?? 'Could not create a download link.',
+    )
+  }
+
+  // Fetch the file contents instead of opening the PDF URL.
+  const response = await fetch(data.signedUrl)
+
+  if (!response.ok) {
+    throw new Error('Could not download the file.')
+  }
+
+  const blob = await response.blob()
+  const blobUrl = URL.createObjectURL(blob)
+  const link = window.document.createElement('a')
+
+  link.href = blobUrl
+  link.download = document.name
+  window.document.body.appendChild(link)
+  link.click()
+  link.remove()
+
+  URL.revokeObjectURL(blobUrl)
 }

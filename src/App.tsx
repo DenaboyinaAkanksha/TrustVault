@@ -2,11 +2,18 @@ import { useEffect, useState } from 'react'
 import Login from './Login'
 import Signup from './Signup'
 import { supabase } from './lib/supabase'
-import { uploadDocument } from './lib/documentService'
+import { shareDocument } from './lib/sharingService'
+
+import {
+  deleteDocument,
+  downloadDocument,
+  listDocuments,
+  uploadDocument,
+} from './lib/documentService'
 
 
 type Document = {
-  id: number
+  id: string
   name: string
   type: string
   size: string
@@ -48,21 +55,7 @@ const folders = [
   { name: 'Benefits & Insurance', icon: 'shield-check', color: 'text-pink-600 bg-pink-50', description: 'EPF, insurance and benefits' },
 ]
 
-const initialDocuments: Document[] = [
-  { id: 1, name: 'Welcome Letter.pdf', type: 'PDF', size: '420 KB', date: 'Oct 18, 2026', folder: 'Employment Documents' },
-  { id: 2, name: 'Offer Letter.pdf', type: 'PDF', size: '580 KB', date: 'Oct 17, 2026', folder: 'Employment Documents' },
-  { id: 3, name: 'Appointment Letter.pdf', type: 'PDF', size: '510 KB', date: 'Oct 16, 2026', folder: 'Employment Documents' },
-  { id: 4, name: 'September 2026 Payslip.pdf', type: 'PDF', size: '220 KB', date: 'Oct 01, 2026', folder: 'Payslips' },
-  { id: 5, name: 'August 2026 Payslip.pdf', type: 'PDF', size: '215 KB', date: 'Sep 01, 2026', folder: 'Payslips' },
-  { id: 6, name: 'July 2026 Payslip.pdf', type: 'PDF', size: '218 KB', date: 'Aug 01, 2026', folder: 'Payslips' },
-  { id: 7, name: 'Annual Hike Letter 2026.pdf', type: 'PDF', size: '360 KB', date: 'Apr 10, 2026', folder: 'Salary & Hike Letters' },
-  { id: 8, name: 'Revised CTC Letter.pdf', type: 'PDF', size: '390 KB', date: 'Apr 10, 2026', folder: 'Salary & Hike Letters' },
-  { id: 9, name: 'Form 16 - FY 2025-26.pdf', type: 'PDF', size: '680 KB', date: 'Jun 15, 2026', folder: 'Tax Documents' },
-  { id: 10, name: 'Form 26AS - FY 2025-26.pdf', type: 'PDF', size: '450 KB', date: 'Jun 14, 2026', folder: 'Tax Documents' },
-  { id: 11, name: 'ITR Acknowledgement.pdf', type: 'PDF', size: '310 KB', date: 'Jul 20, 2026', folder: 'Tax Documents' },
-  { id: 12, name: 'EPF Statement.pdf', type: 'PDF', size: '290 KB', date: 'Sep 12, 2026', folder: 'Benefits & Insurance' },
-  { id: 13, name: 'Health Insurance Policy.pdf', type: 'PDF', size: '1.2 MB', date: 'Aug 22, 2026', folder: 'Benefits & Insurance' },
-]
+const initialDocuments: Document[] = []
 
 function App() {
   const [activeFolder, setActiveFolder] = useState('All Documents')
@@ -73,52 +66,94 @@ function App() {
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null)
   const [showUploadForm, setShowUploadForm] = useState(false)
   const [authLoading, setAuthLoading] = useState(true)
-  
+  const [shareFormOpen, setShareFormOpen] = useState(false)
+  const [recipientEmail, setRecipientEmail] = useState('')
+  const [sharePermission, setSharePermission] = useState<'read' | 'edit'>('read')
+
+
+
+
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setDocuments([])
+      return
+    }
+
+    let cancelled = false
+
+    async function loadDocuments() {
+      try {
+        const storedDocuments = await listDocuments()
+
+        if (cancelled) return
+
+        const formattedDocuments = storedDocuments.map((document) => ({
+          id: document.id,
+          name: document.name,
+          type: document.mime_type,
+          size: `${(document.size_bytes / (1024 * 1024)).toFixed(2)} MB`,
+          date: new Date(document.created_at).toLocaleDateString(),
+          folder: document.folder,
+        }))
+
+        setDocuments(formattedDocuments)
+      } catch (error) {
+        console.error('Failed to load documents:', error)
+      }
+    }
+
+    void loadDocuments()
+
+    return () => {
+      cancelled = true
+    }
+  }, [isLoggedIn])
 
 
   async function handleSignOut() {
-   const { error } = await supabase.auth.signOut()
-
-   if (error) {
-    alert('Unable to sign out. Please try again.')
-    return
-   }
-
-  setIsLoggedIn(false)
-  setCurrentPage('login')
-}  
-
- useEffect(() => {
-  let mounted = true
-
-  async function checkSession() {
-    const { data, error } = await supabase.auth.getSession()
-
-    if (!mounted) return
+    const { error } = await supabase.auth.signOut()
 
     if (error) {
-      setIsLoggedIn(false)
-    } else {
-      setIsLoggedIn(Boolean(data.session))
+      alert('Unable to sign out. Please try again.')
+      return
     }
 
-    setAuthLoading(false)
+    setIsLoggedIn(false)
+    setCurrentPage('login')
   }
 
-  void checkSession()
+  useEffect(() => {
+    let mounted = true
 
-  const {
-    data: { subscription },
-  } = supabase.auth.onAuthStateChange((_event, session) => {
-    setIsLoggedIn(Boolean(session))
-    setAuthLoading(false)
-  })
+    async function checkSession() {
+      const { data, error } = await supabase.auth.getSession()
 
-  return () => {
-    mounted = false
-    subscription.unsubscribe()
-  }
-}, [])
+      if (!mounted) return
+
+      if (error) {
+        setIsLoggedIn(false)
+      } else {
+        setIsLoggedIn(Boolean(data.session))
+      }
+
+      setAuthLoading(false)
+    }
+
+    void checkSession()
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(Boolean(session))
+      setAuthLoading(false)
+    })
+
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
+  }, [])
 
   const visibleDocuments = documents.filter((document) => {
     const matchesFolder =
@@ -129,35 +164,35 @@ function App() {
 
   const folderCount = (folderName: string) =>
     documents.filter((document) => document.folder === folderName).length
- 
+
   if (authLoading) {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50">
-      <p className="text-sm font-medium text-slate-600">
-        Loading TrustVault...
-      </p>
-    </div>
-  )
-}  
- if (!isLoggedIn) {
-  if (currentPage === 'signup') {
     return (
-      <Signup
-        onSignup={() => {
-          alert('Signup is not connected yet. Real account creation comes next.')
-        }}
-        onLogin={() => setCurrentPage('login')}
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <p className="text-sm font-medium text-slate-600">
+          Loading TrustVault...
+        </p>
+      </div>
+    )
+  }
+  if (!isLoggedIn) {
+    if (currentPage === 'signup') {
+      return (
+        <Signup
+          onSignup={() => {
+            alert('Signup is not connected yet. Real account creation comes next.')
+          }}
+          onLogin={() => setCurrentPage('login')}
+        />
+      )
+    }
+
+    return (
+      <Login
+        onLogin={() => setIsLoggedIn(true)}
+        onSignup={() => setCurrentPage('signup')}
       />
     )
   }
-
-  return (
-    <Login
-      onLogin={() => setIsLoggedIn(true)}
-      onSignup={() => setCurrentPage('signup')}
-    />
-  )
-}
 
 
   return (
@@ -202,55 +237,52 @@ function App() {
       </aside>
 
       <main className="min-w-0 flex-1 p-5 sm:p-8 lg:p-10">
-       
-    <header className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight text-slate-900">
-          My Documents
-        </h2>
-         <p className="mt-1 text-sm text-slate-500">
-         Manage and organize your important files.
-       </p>
-     </div>
 
-    <div className="flex items-center gap-4">
-      <button
-       type="button"
-        onClick={() => setShowUploadForm(true)}
-        className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-        >
-      <span className="mr-2 text-lg leading-none">+</span>
-         Upload document
-      </button>
+        <header className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight text-slate-900">
+              My Documents
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Manage and organize your important files.
+            </p>
+          </div>
 
-     <button
-        type="button"
-        onClick={handleSignOut}
-        className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
-       >
-       Sign out
-     </button>
-   </div>
- </header>
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => setShowUploadForm(true)}
+              className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+              <span className="mr-2 text-lg leading-none">+</span>
+              Upload document
+            </button>
 
-       {showUploadForm && (
-           <UploadForm
-          onCancel={() => setShowUploadForm(false)}
-          onUpload={(newDocument) => {
-          setDocuments((currentDocuments) => [
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
+            >
+              Sign out
+            </button>
+          </div>
+        </header>
+
+        {showUploadForm && (
+          <UploadForm
+            onCancel={() => setShowUploadForm(false)}
+            onUpload={(newDocument) => {
+              setDocuments((currentDocuments) => [
+                newDocument,
                 ...currentDocuments,
-            {
-          id: Math.max(0, ...currentDocuments.map((document) => document.id)) + 1,
-              ...newDocument,
-           },
-          ])
-        setActiveFolder('All Documents')
-        setSearch('')
-       }}
-       />
-       )}
+              ])
+              setActiveFolder('All Documents')
+              setSearch('')
+            }}
+          />
+        )}
 
-      
+
 
         <section className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {folders.map((folder) => (
@@ -299,52 +331,66 @@ function App() {
                 </tr>
               </thead>
               <tbody>
-              
-        {visibleDocuments.map((document) => (
-          <tr
-            key={document.id}
-            className="border-b border-slate-50 last:border-0 hover:bg-slate-50"
-           >
-          <td className="py-4 pr-4">
-           <div className="flex items-center gap-3">
-            <FileTypeBadge fileName={document.name} />
-            <button
-              type="button"
-              onClick={() => setSelectedDocument(document)}
-              className="text-left font-medium text-slate-700 hover:text-blue-600 hover:underline"
-            >
-              {document.name}
-            </button>
-           </div>
-          </td>
 
-          <td className="py-4 text-slate-500">{document.folder}</td>
-          <td className="py-4 text-slate-500">{document.size}</td>
-          <td className="py-4 text-slate-500">{document.date}</td>
- 
-          <td className="py-4 text-right">
-           <button
-              type="button"
-               onClick={() => {
-               const confirmed = window.confirm(
-                `Are you sure you want to delete "${document.name}"?`
-                 )
+                {visibleDocuments.map((document) => (
+                  <tr
+                    key={document.id}
+                    className="border-b border-slate-50 last:border-0 hover:bg-slate-50"
+                  >
+                    <td className="py-4 pr-4">
+                      <div className="flex items-center gap-3">
+                        <FileTypeBadge fileName={document.name} />
+                        <button
+                          type="button"
+                          onClick={() => setSelectedDocument(document)}
+                          className="text-left font-medium text-slate-700 hover:text-blue-600 hover:underline"
+                        >
+                          {document.name}
+                        </button>
+                      </div>
+                    </td>
 
-              if (confirmed) {
-                 setDocuments((currentDocuments) =>
-                  currentDocuments.filter(
-                   (item) => item.id !== document.id
-                   )
-                )
-              }
-             }}
-            className="rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
-             >
-             Delete
-            </button>
-          </td>
-       </tr>
-       ))}
+                    <td className="py-4 text-slate-500">{document.folder}</td>
+                    <td className="py-4 text-slate-500">{document.size}</td>
+                    <td className="py-4 text-slate-500">{document.date}</td>
+
+                    <td className="py-4 text-right">
+
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const confirmed = window.confirm(
+                            `Are you sure you want to delete "${document.name}"?`,
+                          )
+
+                          if (!confirmed) return
+
+                          try {
+                            await deleteDocument(String(document.id))
+
+                            setDocuments((currentDocuments) =>
+                              currentDocuments.filter(
+                                (item) => item.id !== document.id,
+                              ),
+                            )
+                          } catch (error) {
+                            console.error('Failed to delete document:', error)
+
+                            window.alert(
+                              error instanceof Error
+                                ? error.message
+                                : 'Could not delete the document. Please try again.',
+                            )
+                          }
+                        }}
+                        className="rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+                      >
+                        Delete
+                      </button>
+
+                    </td>
+                  </tr>
+                ))}
 
                 {visibleDocuments.length === 0 && (
                   <tr>
@@ -356,10 +402,8 @@ function App() {
               </tbody>
             </table>
           </div>
-          <p className="mt-5 text-xs text-slate-400">
-            Demo content only. These are fictional examples; no actual documents are stored or protected yet.
-          </p>
-        
+
+
         </section>
       </main>
 
@@ -432,10 +476,113 @@ function App() {
                 </p>
               </div>
 
-              <p className="rounded-xl bg-amber-50 p-4 text-sm text-amber-800">
-                this panel displays document information only.
-    
-              </p>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await downloadDocument(selectedDocument.id)
+                  } catch (error) {
+                    window.alert(
+                      error instanceof Error
+                        ? error.message
+                        : 'Could not download the document.',
+                    )
+                  }
+                }}
+                className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700"
+              >
+                Download document
+              </button>
+
+
+              {shareFormOpen && (
+                <form
+                  className="mt-4 space-y-4 rounded-xl border border-gray-200 p-4"
+                  
+                  onSubmit={async (event) => {
+                    event.preventDefault()
+
+                    try {
+                      await shareDocument(
+                        selectedDocument.id,
+                        recipientEmail,
+                        sharePermission,
+                      )
+
+                      window.alert('Document shared successfully!')
+                      setRecipientEmail('')
+                      setShareFormOpen(false)
+                    } catch (error) {
+                      window.alert(
+                        error instanceof Error
+                          ? error.message
+                          : 'Could not share the document.',
+                      )
+                    }
+                  }}
+
+                >
+                  <div>
+                    <label
+                      htmlFor="recipientEmail"
+                      className="mb-1 block text-sm font-medium text-gray-700"
+                    >
+                      Recipient email
+                    </label>
+                    <input
+                      id="recipientEmail"
+                      type="email"
+                      value={recipientEmail}
+                      onChange={(event) => setRecipientEmail(event.target.value)}
+                      placeholder="Enter registered user's email"
+                      required
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="sharePermission"
+                      className="mb-1 block text-sm font-medium text-gray-700"
+                    >
+                      Permission
+                    </label>
+                    <select
+                      id="sharePermission"
+                      value={sharePermission}
+                      onChange={(event) =>
+                        setSharePermission(event.target.value as 'read' | 'edit')
+                      }
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    >
+                      <option value="read">Read only</option>
+                      <option value="edit">Can edit</option>
+                    </select>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700"
+                  >
+                    Grant access
+                  </button>
+                </form>
+              )}
+
+
+
+              
+              <button
+                type="button"
+                onClick={() => setShareFormOpen((open) => !open)}
+                className="mt-3 w-full rounded-xl border border-blue-600 px-4 py-3 text-sm font-semibold text-blue-600 hover:bg-blue-50"
+              >
+                {shareFormOpen ? 'Cancel sharing' : 'Share document'}
+              </button>
+
+
+
             </div>
 
 
@@ -444,7 +591,7 @@ function App() {
               onClick={() => setSelectedDocument(null)}
               className="mt-8 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             >
-              Close 
+              Close
             </button>
           </aside>
         </div>
@@ -461,7 +608,7 @@ function UploadForm({
   onUpload,
 }: {
   onCancel: () => void
-  onUpload: (document: Omit<Document, 'id'>) => void
+  onUpload: (document: Document) => void
 }) {
   const [fileName, setFileName] = useState('')
   const [folder, setFolder] = useState('Employment Documents')
@@ -504,6 +651,7 @@ function UploadForm({
                 : `${sizeInKB} KB`
 
             onUpload({
+              id: savedDocument.id,
               name: savedDocument.name,
               type: savedDocument.mime_type,
               size: formattedSize,
