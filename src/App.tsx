@@ -17,6 +17,7 @@ import {
   updateDocumentDetails,
 } from './lib/documentService'
 import { listAuditLogs, type AuditLog } from './lib/auditService'
+import ResetPassword from './ResetPassword'
 
 type Document = {
   id: string
@@ -99,6 +100,7 @@ function App() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [currentUserName, setCurrentUserName] = useState('')
   const [currentPage, setCurrentPage] = useState<'login' | 'signup'>('login')
+  const [isResettingPassword, setIsResettingPassword] = useState(false)
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null)
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
   const [auditLoading, setAuditLoading] = useState(false)
@@ -273,7 +275,10 @@ function App() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsResettingPassword(true)
+      }
       setIsLoggedIn(Boolean(session))
       setCurrentUserId(session?.user.id ?? null)
       setCurrentUserName(
@@ -308,6 +313,23 @@ function App() {
       </div>
     )
   }
+  
+
+if (isResettingPassword) {
+  return (
+    <ResetPassword
+      onComplete={async () => {
+        await supabase.auth.signOut()
+        setIsResettingPassword(false)
+        setIsLoggedIn(false)
+        setCurrentPage('login')
+      }}
+    />
+  )
+}
+
+
+
 
   if (!isLoggedIn) {
     if (currentPage === 'signup') {
