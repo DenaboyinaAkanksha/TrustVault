@@ -87,6 +87,9 @@ export async function listDocumentAccess(
 
   return (data ?? []) as DocumentAccess[]
 }
+
+
+
 export async function getMyDocumentPermission(
   documentId: string,
 ): Promise<'owner' | 'read' | 'edit' | null> {

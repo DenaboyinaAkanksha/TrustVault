@@ -159,6 +159,10 @@ export async function listDocuments(): Promise<StoredDocument[]> {
    return (response.data ?? []) as StoredDocument[]
 
 }
+
+
+
+
 export async function updateDocumentDetails(
   documentId: string,
   name: string,
@@ -189,6 +193,7 @@ export async function updateDocumentDetails(
     )
   }
 }
+
 
 
 export async function downloadDocument(
@@ -229,13 +234,13 @@ export async function downloadDocument(
     },
   )
 
-  if (auditError) {
-    console.error('Download audit RPC failed:', auditError)
-    alert(`Download audit failed: ${auditError.message}`)
-    throw new Error(
-      `File downloaded, but audit logging failed: ${auditError.message}`,
-    )
-  }
+if (auditError) {
+  console.error('Download audit RPC failed:', auditError)
+  alert(`Download audit failed: ${auditError.message}`)
+  throw new Error(
+    `File downloaded, but audit logging failed: ${auditError.message}`,
+  )
+}
 
   const blobUrl = URL.createObjectURL(blob)
   const link = window.document.createElement('a')
