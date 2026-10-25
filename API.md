@@ -196,7 +196,31 @@ The `permission` field accepts `read` or `edit`.
 
 **Revocation verification:** Test that the recipient loses access immediately after revocation, including access to document metadata and file downloads. Existing signed URLs may remain usable until their expiry, so the current 60-second signed-URL behavior should be considered when evaluating immediate revocation.
 
+## 3.9 Admin Service and Audit Activity
 
+**Purpose:** Provide administrative visibility into TrustVault activity while keeping administrative audit access separate from ordinary document permissions.
+
+**Database components:**
+- `user_roles`: stores application role information.
+- `audit_logs`: stores audit events.
+- `get_audit_trail()`: a database function intended to retrieve audit activity for authorized users.
+
+**Intended behavior:**
+1. The application identifies the signed-in user.
+2. The user's assigned role determines whether administrative audit access is permitted.
+3. An authorized administrator can review audit activity across users, according to the database function's access rules.
+4. Ordinary users should be restricted to audit records they are permitted to view.
+5. Administrative audit visibility does not automatically authorize an administrator to read, edit, download, or delete every document.
+
+**Authorization requirements:**
+- Role assignments must be controlled so users cannot make themselves administrators.
+- Administrative authorization must be enforced by trusted database or server-side logic, not just by hiding UI elements.
+- The `get_audit_trail()` function's `SECURITY DEFINER` behavior and execution permissions should be reviewed carefully.
+- Audit records should not be modifiable by ordinary users unless a specific, justified policy permits it.
+
+**Implementation note:** The database includes `user_roles` and `audit_logs`, and the `get_audit_trail()` function is configured to allow owner-related audit records or administrator access. The complete admin UI and all role-enforcement paths should be tested before claiming comprehensive administrative security.
+
+**Known limitation:** This documentation does not establish that administrators have unrestricted document access. Any such capability must be explicitly implemented and authorized rather than inferred from audit access.
 
 ## 4. Intended role-permission matrix
 

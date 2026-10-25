@@ -118,3 +118,24 @@ For future AI-assisted changes, use these instructions:
 ## Reflection
 
 AI helped with development guidance, code review, and documentation. It was most useful when work was broken into small steps and actual project code was provided for review. AI suggestions still required checking against the application's implementation, particularly for authorization, audit completeness, and revocation behavior.
+### Entry — Vercel Production Deployment
+
+- **Date:** 2026-10-24
+- **Area:** Production deployment
+- **Prompt summary:** Deploy the TrustVault frontend to Vercel and verify that the production application can communicate with the Supabase backend.
+- **What AI produced:** Guidance for configuring the Vercel project, setting the Vite build command and output directory, and configuring the frontend's Supabase environment variables.
+- **Issues encountered:** Production configuration differs from local development. Environment variables and allowed origins must be configured for the deployed application, not just localhost.
+- **How it was addressed:** Configured the Vercel deployment using the Vite build settings and the required frontend environment variable names. The production frontend was deployed and opened for testing.
+- **Verification:** Confirmed that the deployed application loaded. Backend functionality should be verified separately for each feature.
+- **Commit:** Add the actual Git commit URL if related code changes were committed. Deployment configuration changes made only in the Vercel dashboard may not have a corresponding Git commit.
+
+### Entry — Production CORS Fix for Access Revocation
+
+- **Date:** 2026-10-25
+- **Area:** Edge Function integration and production debugging
+- **Prompt summary:** Troubleshoot the access-revocation request failing from the deployed TrustVault frontend.
+- **What AI produced:** Guidance for checking the Edge Function's CORS headers and allowing the actual production frontend origin in addition to the local development origin.
+- **Issue encountered:** The browser request was blocked because the production frontend origin was not correctly allowed by the Edge Function's CORS configuration.
+- **How it was addressed:** Updated the allowed-origin configuration to include the deployed Vercel frontend origin and corrected the origin string to avoid a trailing-slash mismatch. Redeployed the function.
+- **Verification:** Confirmed that the revoke-access flow worked after the CORS correction. This verifies the tested flow, but does not independently prove every authorization, storage, or audit-trail security property.
+- **Commit:** Add the actual Git commit URL if the related source change was committed.
